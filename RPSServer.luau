@@ -5,6 +5,41 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+
+-----------------------------------------------
+-- 효과음 시스템
+-- Roblox 무료 사운드 에셋 사용
+-----------------------------------------------
+local SOUNDS = {
+	slap      = "rbxassetid://5765933873",  -- 찰싹/빡 때리는 소리
+	whoosh    = "rbxassetid://320557563",   -- 날아가는 휘이잉 소리
+	crash     = "rbxassetid://282954522",   -- 쿵! 착지/충돌 소리
+	dramatic  = "rbxassetid://1837756993",  -- 극적 효과음 (올라갈 때)
+}
+
+local function playSound(soundId, position, volume, pitch)
+	local part = Instance.new("Part")
+	part.Size = Vector3.new(1, 1, 1)
+	part.Position = position or Vector3.new(0, 10, 0)
+	part.Anchored = true
+	part.CanCollide = false
+	part.Transparency = 1
+	part.Parent = workspace
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = volume or 1
+	sound.PlaybackSpeed = pitch or 1
+	sound.RollOffMaxDistance = 200
+	sound.Parent = part
+	sound:Play()
+
+	-- 재생 끝나면 정리
+	task.delay(5, function()
+		part:Destroy()
+	end)
+end
 
 local function getOrCreate(name, className)
 	local obj = ReplicatedStorage:FindFirstChild(name)
@@ -211,16 +246,36 @@ local function dieHardSlap(character)
 	local sideDir = startCF.RightVector
 	local backDir = startCF.LookVector * -1
 
-	-- 머리에 파티클
+	-- 머리에 파티클 + 빡! 소리
 	local head = character:FindFirstChild("Head")
 	if head then
 		createSlapEffect(head.Position)
+		playSound(SOUNDS.slap, head.Position, 2, 0.8)  -- 빡! (크고 낮게)
 	end
 
-	-- 애니메이션 키프레임 정의
-	-- {시간, 위치오프셋, 회전각도(X,Y,Z)}
+	-- 날아가는 소리 (약간 지연)
+	task.spawn(function()
+		task.wait(0.2)
+		if root and root.Parent then
+			playSound(SOUNDS.whoosh, root.Position, 1.5, 1.2)  -- 휘이잉
+		end
+		task.wait(0.5)
+		if root and root.Parent then
+			playSound(SOUNDS.dramatic, root.Position, 1, 1)  -- 극적 효과
+		end
+	end)
+
+	-- 착지 소리 (타이밍 맞춤)
+	task.spawn(function()
+		task.wait(2.5)
+		if root and root.Parent then
+			playSound(SOUNDS.crash, root.Position, 2.5, 0.7)  -- 쿵!! (크고 묵직하게)
+		end
+	end)
+
+	-- 애니메이션 키프레임
 	local totalDuration = 3.0
-	local peakHeight = 60  -- 올라가는 높이
+	local peakHeight = 60
 
 	local startTime = tick()
 
@@ -338,6 +393,7 @@ local function slapPlayer(player)
 	local head = character:FindFirstChild("Head")
 	if head then
 		createSlapEffect(head.Position)
+		playSound(SOUNDS.slap, head.Position, 2, 0.9)  -- 빡!
 	end
 
 	if humanoid then

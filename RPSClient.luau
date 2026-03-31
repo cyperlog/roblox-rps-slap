@@ -11,6 +11,30 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local screenGui = script.Parent
 
+-----------------------------------------------
+-- UI 효과음
+-----------------------------------------------
+local UI_SOUNDS = {
+	click    = "rbxassetid://6895079853",   -- 버튼 클릭
+	win      = "rbxassetid://1837756993",   -- 이겼을 때 징글
+	lose     = "rbxassetid://282954522",    -- 졌을 때
+	streak   = "rbxassetid://5766164683",   -- 연승 팝업
+	select   = "rbxassetid://6895079853",   -- 캐릭터 선택
+	countdown = "rbxassetid://5765933873",  -- 가위바위보 카운트
+}
+
+local function playUISound(soundId, volume, pitch)
+	local sound = Instance.new("Sound")
+	sound.SoundId = soundId
+	sound.Volume = volume or 0.5
+	sound.PlaybackSpeed = pitch or 1
+	sound.Parent = screenGui
+	sound:Play()
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+end
+
 -- RemoteEvent
 local rpsChoice = ReplicatedStorage:WaitForChild("RPSChoice")
 local rpsResult = ReplicatedStorage:WaitForChild("RPSResult")
@@ -305,12 +329,14 @@ for _, btn in ipairs(charSelect:WaitForChild("CharList"):GetChildren()) do
 			btn.BorderSizePixel = 3
 			btn.BorderColor3 = Color3.fromRGB(255, 255, 50)
 			selectedNPCName = btn.Name
+			playUISound(UI_SOUNDS.select, 0.4, 1.3)
 		end)
 	end
 end
 
 charSelect:WaitForChild("StartBtn").MouseButton1Click:Connect(function()
 	if not selectedNPCName then return end
+	playUISound(UI_SOUNDS.click, 0.6, 1)
 	charSelect.Visible = false
 
 	-- 서버에 캐릭터 변경 요청 (위치 리셋 포함)
@@ -356,6 +382,7 @@ for _, btn in ipairs(buttons:GetChildren()) do
 	if btn:IsA("TextButton") then
 		btn.MouseButton1Click:Connect(function()
 			if not canChoose then return end
+			playUISound(UI_SOUNDS.click, 0.5, 1.2)
 			disableButtons()
 			result.Text = btn.Name .. " 선택!"
 			rpsChoice:FireServer(btn.Name)
@@ -372,6 +399,7 @@ rpsResult.OnClientEvent:Connect(function(data)
 	local playerChoice = data.playerChoice
 
 	if outcome == "draw" then
+		playUISound(UI_SOUNDS.click, 0.3, 0.8)
 		result.Text = "비겼다! (둘 다 " .. npcChoice .. ") 다시!"
 		title.Text = "다시!"
 		task.wait(1.5)
@@ -383,13 +411,14 @@ rpsResult.OnClientEvent:Connect(function(data)
 		-- UI 숨기고 연출에 집중
 		frame.Visible = false
 
-		-- 빡! 때리기 연출
+		-- 빡! 때리기 연출 (서버에서 소리도 같이 남)
 		playSlapEffect(true)
 
-		-- 연출 감상 시간 (서버 다이하드 애니메이션 3초 + 여유)
+		-- 연출 감상 시간
 		task.wait(3.5)
 
-		-- 연승 팝업
+		-- 연승 팝업 + 효과음
+		playUISound(UI_SOUNDS.streak, 0.8, 1)
 		showStreakPopup(streak)
 		task.wait(2)
 
@@ -401,13 +430,14 @@ rpsResult.OnClientEvent:Connect(function(data)
 		-- UI 숨기고 연출에 집중
 		frame.Visible = false
 
-		-- 맞는 연출 (플래시 + 흔들림)
+		-- 맞는 연출
 		playSlapEffect(false)
 
-		-- 넘어지는 연출 감상 (1.5초 애니메이션)
+		-- 넘어지는 연출 감상
 		task.wait(2)
 
-		-- 게임 오버 표시
+		-- 게임 오버 + 효과음
+		playUISound(UI_SOUNDS.lose, 0.8, 0.6)
 		frame.Visible = true
 		title.Text = "게임 오버!"
 		result.Text = "최종 기록: " .. streak .. "연승"
