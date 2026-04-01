@@ -1,6 +1,6 @@
 -- RPSClient.luau
 -- StarterGui > ScreenGui 안에 LocalScript로 넣기
--- 클라이언트: UI + 카메라 연출 + 타격감
+-- 클라이언트: UI + 카메라 연출 + 싱글/PvP 처리
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,12 +15,12 @@ local screenGui = script.Parent
 -- UI 효과음
 -----------------------------------------------
 local UI_SOUNDS = {
-	click    = "rbxassetid://6895079853",   -- 버튼 클릭
-	win      = "rbxassetid://1837756993",   -- 이겼을 때 징글
-	lose     = "rbxassetid://282954522",    -- 졌을 때
-	streak   = "rbxassetid://5766164683",   -- 연승 팝업
-	select   = "rbxassetid://6895079853",   -- 캐릭터 선택
-	countdown = "rbxassetid://5765933873",  -- 가위바위보 카운트
+	click     = "rbxassetid://6895079853",
+	win       = "rbxassetid://1837756993",
+	lose      = "rbxassetid://282954522",
+	streak    = "rbxassetid://5766164683",
+	select    = "rbxassetid://6895079853",
+	countdown = "rbxassetid://5765933873",
 }
 
 local function playUISound(soundId, volume, pitch)
@@ -30,53 +30,58 @@ local function playUISound(soundId, volume, pitch)
 	sound.PlaybackSpeed = pitch or 1
 	sound.Parent = screenGui
 	sound:Play()
-	sound.Ended:Connect(function()
-		sound:Destroy()
-	end)
+	sound.Ended:Connect(function() sound:Destroy() end)
 end
 
+-----------------------------------------------
 -- RemoteEvent
+-----------------------------------------------
 local rpsChoice = ReplicatedStorage:WaitForChild("RPSChoice")
 local rpsResult = ReplicatedStorage:WaitForChild("RPSResult")
+local rpsPvP = ReplicatedStorage:WaitForChild("RPSPvP")
+local rpsAnnounce = ReplicatedStorage:WaitForChild("RPSAnnounce")
 
+-----------------------------------------------
 -- UI 요소
+-----------------------------------------------
+local modeSelect = screenGui:WaitForChild("ModeSelect")
+local charSelect = screenGui:WaitForChild("CharSelect")
+local pvpWait = screenGui:WaitForChild("PvPWait")
+local challengePopup = screenGui:WaitForChild("ChallengePopup")
+local announceBar = screenGui:WaitForChild("AnnounceBar")
+local pvpEndFrame = screenGui:WaitForChild("PvPEndFrame")
 local frame = screenGui:WaitForChild("RPSFrame")
 local title = frame:WaitForChild("Title")
 local result = frame:WaitForChild("Result")
 local buttons = frame:WaitForChild("Buttons")
 local scoreLabel = screenGui:WaitForChild("Score")
-local charSelect = screenGui:WaitForChild("CharSelect")
 local streakPopup = screenGui:WaitForChild("StreakPopup")
 
+-----------------------------------------------
+-- 상태 변수
+-----------------------------------------------
+local gameMode = nil   -- "solo" or "pvp"
 local canChoose = false
 local streak = 0
 local inGame = false
+local currentOpponentId = nil   -- PvP 상대 UserId (복수용)
+local pendingChallengeFromId = nil  -- 도전장 보낸 사람
 
 -----------------------------------------------
--- 화면 흔들기 (타격감 핵심)
+-- 화면 연출 함수들
 -----------------------------------------------
-local shaking = false
-
 local function shakeCamera(intensity, duration)
-	shaking = true
 	local startTime = tick()
-	local originalCFrame = camera.CFrame
-
 	while tick() - startTime < duration do
 		local elapsed = tick() - startTime
-		-- 점점 줄어드는 흔들림
 		local decay = 1 - (elapsed / duration)
-		local shakeX = (math.random() - 0.5) * 2 * intensity * decay
-		local shakeY = (math.random() - 0.5) * 2 * intensity * decay
-		camera.CFrame = camera.CFrame * CFrame.new(shakeX, shakeY, 0)
+		local sx = (math.random() - 0.5) * 2 * intensity * decay
+		local sy = (math.random() - 0.5) * 2 * intensity * decay
+		camera.CFrame = camera.CFrame * CFrame.new(sx, sy, 0)
 		task.wait()
 	end
-	shaking = false
 end
 
------------------------------------------------
--- 화면 번쩍임 (히트 플래시)
------------------------------------------------
 local function hitFlash(color)
 	local flash = screenGui:FindFirstChild("HitFlash")
 	if not flash then
@@ -96,54 +101,31 @@ local function hitFlash(color)
 		BackgroundTransparency = 1
 	})
 	tween:Play()
-	tween.Completed:Connect(function()
-		flash.Visible = false
-	end)
+	tween.Completed:Connect(function() flash.Visible = false end)
 end
 
------------------------------------------------
--- 슬로모션 (때리기 직전 + 직후)
------------------------------------------------
-local function slowMotion(slowDuration, slowFactor)
-	-- 살짝 느려짐
-	workspace:SetAttribute("TimeScale", slowFactor)
-
-	-- ColorCorrection으로 임팩트 느낌
+local function slowMotion(dur, factor)
+	workspace:SetAttribute("TimeScale", factor)
 	local cc = Instance.new("ColorCorrectionEffect")
 	cc.Contrast = 0.3
 	cc.Saturation = 0.5
 	cc.TintColor = Color3.fromRGB(255, 220, 200)
 	cc.Parent = Lighting
-
-	task.wait(slowDuration)
-
-	-- 원래 속도로 복귀
+	task.wait(dur)
 	workspace:SetAttribute("TimeScale", 1)
-
-	local fadeTween = TweenService:Create(cc, TweenInfo.new(0.3), {
-		Contrast = 0,
-		Saturation = 0,
-	})
+	local fadeTween = TweenService:Create(cc, TweenInfo.new(0.3), { Contrast = 0, Saturation = 0 })
 	fadeTween:Play()
-	fadeTween.Completed:Connect(function()
-		cc:Destroy()
-	end)
+	fadeTween.Completed:Connect(function() cc:Destroy() end)
 end
 
------------------------------------------------
--- 카메라 줌인 (때리는 순간)
------------------------------------------------
 local function impactZoom()
 	local currentCF = camera.CFrame
 	local lookDir = currentCF.LookVector
-
-	-- 줌인
 	local zoomIn = TweenService:Create(camera, TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		CFrame = currentCF + lookDir * 2
 	})
 	zoomIn:Play()
 	zoomIn.Completed:Connect(function()
-		-- 줌아웃 (원래로)
 		local zoomOut = TweenService:Create(camera, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			CFrame = currentCF
 		})
@@ -151,19 +133,15 @@ local function impactZoom()
 	end)
 end
 
------------------------------------------------
--- 빡! 때리기 연출 (코믹 스타일)
------------------------------------------------
-local function playSlapEffect(isPlayerWin)
-	-- 빡! 순간: 플래시 + 흔들림 + 슬로모션
-	hitFlash(isPlayerWin and Color3.fromRGB(255, 100, 50) or Color3.fromRGB(255, 0, 0))
+local function playSlapEffect(isWin)
+	hitFlash(isWin and Color3.fromRGB(255, 100, 50) or Color3.fromRGB(255, 0, 0))
 	task.spawn(function() shakeCamera(2, 0.4) end)
 	task.spawn(function() slowMotion(0.2, 0.15) end)
 	impactZoom()
 end
 
 -----------------------------------------------
--- 연승 팝업 연출
+-- 연승 팝업
 -----------------------------------------------
 local function showStreakPopup(count)
 	local messages = {
@@ -176,10 +154,8 @@ local function showStreakPopup(count)
 		[50] = "🌟 50연승! 우주 최강 뺨!",
 	}
 
-	-- 매 라운드 기본 표시
 	scoreLabel.Text = "🔥 " .. count .. "연승"
 
-	-- 특별 연승 팝업
 	local msg = messages[count]
 	if not msg and count >= 3 and count % 5 == 0 then
 		msg = "🔥 " .. count .. "연승!"
@@ -191,7 +167,6 @@ local function showStreakPopup(count)
 		streakPopup.Visible = true
 		streakPopup.TextSize = 10
 
-		-- 팡! 하고 커지는 애니메이션
 		local popIn = TweenService:Create(streakPopup, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			TextSize = 48
 		})
@@ -199,34 +174,40 @@ local function showStreakPopup(count)
 
 		task.wait(1.5)
 
-		local fadeOut = TweenService:Create(streakPopup, TweenInfo.new(0.5), {
-			TextTransparency = 1
-		})
+		local fadeOut = TweenService:Create(streakPopup, TweenInfo.new(0.5), { TextTransparency = 1 })
 		fadeOut:Play()
-		fadeOut.Completed:Connect(function()
-			streakPopup.Visible = false
-		end)
+		fadeOut.Completed:Connect(function() streakPopup.Visible = false end)
 	end
 end
 
 -----------------------------------------------
--- 옆에서 보는 카메라
+-- 카메라 제어
 -----------------------------------------------
 local function setSideCamera()
 	local character = player.Character
 	if not character then return end
-	local npc = workspace:FindFirstChild("NPC")
-	if not npc then return end
+
+	-- PvP: 상대 플레이어 찾기 / 싱글: NPC
+	local targetRoot = nil
+	if gameMode == "pvp" and currentOpponentId then
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p.UserId == currentOpponentId and p.Character then
+				targetRoot = p.Character:FindFirstChild("HumanoidRootPart")
+				break
+			end
+		end
+	end
+	if not targetRoot then
+		local npc = workspace:FindFirstChild("NPC")
+		if npc then targetRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") end
+	end
 
 	local playerRoot = character:FindFirstChild("HumanoidRootPart")
-	local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso")
-	if not playerRoot or not npcRoot then return end
+	if not playerRoot or not targetRoot then return end
 
-	local midPoint = (playerRoot.Position + npcRoot.Position) / 2
-	local direction = (npcRoot.Position - playerRoot.Position).Unit
+	local midPoint = (playerRoot.Position + targetRoot.Position) / 2
+	local direction = (targetRoot.Position - playerRoot.Position).Unit
 	local sideDirection = direction:Cross(Vector3.new(0, 1, 0)).Unit
-
-	-- 좀 더 가까이 + 얼굴 높이
 	local cameraPos = midPoint + sideDirection * 8 + Vector3.new(0, 2, 0)
 
 	camera.CameraType = Enum.CameraType.Scriptable
@@ -241,67 +222,19 @@ local function resetCamera()
 end
 
 -----------------------------------------------
--- 서로 마주보기
+-- UI 숨기기 헬퍼
 -----------------------------------------------
-local function faceEachOther()
-	local character = player.Character
-	if not character then return end
-	local npc = workspace:FindFirstChild("NPC")
-	if not npc then return end
-
-	local playerRoot = character:FindFirstChild("HumanoidRootPart")
-	local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso")
-	if not playerRoot or not npcRoot then return end
-
-	local npcLookAt = Vector3.new(playerRoot.Position.X, npcRoot.Position.Y, playerRoot.Position.Z)
-	npcRoot.CFrame = CFrame.lookAt(npcRoot.Position, npcLookAt)
-
-	local playerLookAt = Vector3.new(npcRoot.Position.X, playerRoot.Position.Y, npcRoot.Position.Z)
-	playerRoot.CFrame = CFrame.lookAt(playerRoot.Position, playerLookAt)
-end
-
------------------------------------------------
--- 캐릭터 선택
------------------------------------------------
-local selectedNPCName = nil
-
-for _, btn in ipairs(charSelect:WaitForChild("CharList"):GetChildren()) do
-	if btn:IsA("TextButton") then
-		btn.MouseButton1Click:Connect(function()
-			for _, other in ipairs(charSelect.CharList:GetChildren()) do
-				if other:IsA("TextButton") then
-					other.BorderSizePixel = 0
-				end
-			end
-			btn.BorderSizePixel = 3
-			btn.BorderColor3 = Color3.fromRGB(255, 255, 50)
-			selectedNPCName = btn.Name
-			playUISound(UI_SOUNDS.select, 0.4, 1.3)
-		end)
-	end
-end
-
-charSelect:WaitForChild("StartBtn").MouseButton1Click:Connect(function()
-	if not selectedNPCName then return end
-	playUISound(UI_SOUNDS.click, 0.6, 1)
+local function hideAllUI()
+	modeSelect.Visible = false
 	charSelect.Visible = false
-
-	-- 서버에 캐릭터 변경 요청 (위치 리셋 포함)
-	local changeNPC = ReplicatedStorage:WaitForChild("ChangeNPC")
-	changeNPC:FireServer(selectedNPCName)
-
-	-- 위치 리셋 + 아바타 로드 대기
-	task.wait(1.5)
-	inGame = true
-	faceEachOther()
-	task.wait(0.3)
-	setSideCamera()
-	task.wait(0.5)
-	startRound()
-end)
+	pvpWait.Visible = false
+	challengePopup.Visible = false
+	pvpEndFrame.Visible = false
+	frame.Visible = false
+end
 
 -----------------------------------------------
--- 게임 라운드
+-- 가위바위보 라운드 (싱글/PvP 공통)
 -----------------------------------------------
 function startRound()
 	frame.Visible = true
@@ -325,6 +258,7 @@ local function disableButtons()
 	end
 end
 
+-- 버튼 클릭
 for _, btn in ipairs(buttons:GetChildren()) do
 	if btn:IsA("TextButton") then
 		btn.MouseButton1Click:Connect(function()
@@ -332,18 +266,104 @@ for _, btn in ipairs(buttons:GetChildren()) do
 			playUISound(UI_SOUNDS.click, 0.5, 1.2)
 			disableButtons()
 			result.Text = btn.Name .. " 선택!"
-			rpsChoice:FireServer(btn.Name)
+
+			if gameMode == "pvp" then
+				rpsPvP:FireServer({ action = "choice", choice = btn.Name })
+			else
+				rpsChoice:FireServer(btn.Name)
+			end
 		end)
 	end
 end
 
 -----------------------------------------------
--- 서버 결과 수신
+-- 모드 선택
+-----------------------------------------------
+modeSelect:WaitForChild("SoloBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.6, 1)
+	gameMode = "solo"
+	hideAllUI()
+	charSelect.Visible = true
+end)
+
+modeSelect:WaitForChild("PvPBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.6, 1)
+	gameMode = "pvp"
+	hideAllUI()
+	pvpWait.Visible = true
+	rpsPvP:FireServer({ action = "join_queue" })
+end)
+
+-- PvP 대기 취소
+pvpWait:WaitForChild("CancelBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.5, 0.8)
+	rpsPvP:FireServer({ action = "leave_queue" })
+	pvpWait.Visible = false
+	modeSelect.Visible = true
+end)
+
+-- 온라인 인원 업데이트
+task.spawn(function()
+	while true do
+		local count = #Players:GetPlayers()
+		local label = modeSelect:FindFirstChild("OnlineCount")
+		if label then
+			label.Text = "현재 접속: " .. count .. "명"
+		end
+		task.wait(3)
+	end
+end)
+
+-----------------------------------------------
+-- 싱글모드: 캐릭터 선택
+-----------------------------------------------
+local selectedNPCName = nil
+
+for _, btn in ipairs(charSelect:WaitForChild("CharList"):GetChildren()) do
+	if btn:IsA("TextButton") then
+		btn.MouseButton1Click:Connect(function()
+			for _, other in ipairs(charSelect.CharList:GetChildren()) do
+				if other:IsA("TextButton") then
+					other.BorderSizePixel = 0
+				end
+			end
+			btn.BorderSizePixel = 3
+			btn.BorderColor3 = Color3.fromRGB(255, 255, 50)
+			selectedNPCName = btn.Name
+			playUISound(UI_SOUNDS.select, 0.4, 1.3)
+		end)
+	end
+end
+
+charSelect:WaitForChild("BackBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.5, 0.8)
+	charSelect.Visible = false
+	modeSelect.Visible = true
+	gameMode = nil
+end)
+
+charSelect:WaitForChild("StartBtn").MouseButton1Click:Connect(function()
+	if not selectedNPCName then return end
+	playUISound(UI_SOUNDS.click, 0.6, 1)
+	charSelect.Visible = false
+
+	local changeNPCEvt = ReplicatedStorage:WaitForChild("ChangeNPC")
+	changeNPCEvt:FireServer(selectedNPCName)
+
+	task.wait(1.5)
+	inGame = true
+	task.wait(0.3)
+	setSideCamera()
+	task.wait(0.5)
+	startRound()
+end)
+
+-----------------------------------------------
+-- 싱글모드: 결과 수신
 -----------------------------------------------
 rpsResult.OnClientEvent:Connect(function(data)
 	local outcome = data.outcome
 	local npcChoice = data.npcChoice
-	local playerChoice = data.playerChoice
 
 	if outcome == "draw" then
 		playUISound(UI_SOUNDS.click, 0.3, 0.8)
@@ -354,36 +374,22 @@ rpsResult.OnClientEvent:Connect(function(data)
 
 	elseif outcome == "win" then
 		streak = streak + 1
-
-		-- UI 숨기고 연출에 집중
 		frame.Visible = false
-
-		-- 빡! 때리기 연출 (서버에서 소리도 같이 남)
 		playSlapEffect(true)
+		task.wait(2)
 
-		-- 연출 감상 시간
-		task.wait(3.5)
-
-		-- 연승 팝업 + 효과음
 		playUISound(UI_SOUNDS.streak, 0.8, 1)
 		showStreakPopup(streak)
 		task.wait(2)
 
-		-- 다음 상대 선택
 		resetCamera()
 		charSelect.Visible = true
 
 	elseif outcome == "lose" then
-		-- UI 숨기고 연출에 집중
 		frame.Visible = false
-
-		-- 맞는 연출
 		playSlapEffect(false)
-
-		-- 넘어지는 연출 감상
 		task.wait(2)
 
-		-- 게임 오버 + 효과음
 		playUISound(UI_SOUNDS.lose, 0.8, 0.6)
 		frame.Visible = true
 		title.Text = "게임 오버!"
@@ -396,12 +402,235 @@ rpsResult.OnClientEvent:Connect(function(data)
 		scoreLabel.Text = "연승: 0"
 		frame.Visible = false
 		resetCamera()
-		charSelect.Visible = true
+		modeSelect.Visible = true
 	end
 end)
 
 -----------------------------------------------
--- 시작
+-- 서버 공지 표시
 -----------------------------------------------
-charSelect.Visible = true
-frame.Visible = false
+rpsAnnounce.OnClientEvent:Connect(function(msg)
+	announceBar.Text = msg
+	announceBar.Visible = true
+	announceBar.BackgroundTransparency = 0.4
+
+	-- 5초 후 페이드아웃
+	task.delay(4, function()
+		if announceBar.Text == msg then
+			local fade = TweenService:Create(announceBar, TweenInfo.new(1), {
+				BackgroundTransparency = 1,
+			})
+			fade:Play()
+			fade.Completed:Connect(function()
+				if announceBar.Text == msg then
+					announceBar.Visible = false
+				end
+			end)
+		end
+	end)
+end)
+
+-----------------------------------------------
+-- 도전장 팝업 처리
+-----------------------------------------------
+challengePopup:WaitForChild("AcceptBtn").MouseButton1Click:Connect(function()
+	if not pendingChallengeFromId then return end
+	playUISound(UI_SOUNDS.click, 0.6, 1.2)
+	rpsPvP:FireServer({ action = "challenge_reply", fromId = pendingChallengeFromId, accepted = true })
+	challengePopup.Visible = false
+	pendingChallengeFromId = nil
+end)
+
+challengePopup:WaitForChild("DeclineBtn").MouseButton1Click:Connect(function()
+	if not pendingChallengeFromId then return end
+	playUISound(UI_SOUNDS.click, 0.4, 0.7)
+	rpsPvP:FireServer({ action = "challenge_reply", fromId = pendingChallengeFromId, accepted = false })
+	challengePopup.Visible = false
+	pendingChallengeFromId = nil
+end)
+
+-----------------------------------------------
+-- PvP 결과 후 버튼들
+-----------------------------------------------
+pvpEndFrame:WaitForChild("RevengeBtn").MouseButton1Click:Connect(function()
+	if not currentOpponentId then return end
+	playUISound(UI_SOUNDS.click, 0.8, 1.3)
+	pvpEndFrame.Visible = false
+
+	-- 복수 도전 보내기
+	rpsPvP:FireServer({ action = "challenge", targetId = currentOpponentId })
+	pvpEndFrame:WaitForChild("WaitNote").Visible = true
+	pvpEndFrame.Visible = true
+	pvpEndFrame.RevengeBtn.Visible = false
+	pvpEndFrame.RematchBtn.Visible = false
+	pvpEndFrame.ResultLabel.Text = "복수 도전장을 보냈습니다..."
+end)
+
+pvpEndFrame:WaitForChild("RematchBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.6, 1)
+	pvpEndFrame.Visible = false
+	resetCamera()
+	pvpWait.Visible = true
+	rpsPvP:FireServer({ action = "join_queue" })
+end)
+
+pvpEndFrame:WaitForChild("MenuBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.5, 0.8)
+	pvpEndFrame.Visible = false
+	resetCamera()
+	currentOpponentId = nil
+	gameMode = nil
+	modeSelect.Visible = true
+end)
+
+-----------------------------------------------
+-- PvP 이벤트 수신
+-----------------------------------------------
+rpsPvP.OnClientEvent:Connect(function(data)
+	if typeof(data) ~= "table" then return end
+	local action = data.action
+
+	if action == "matched" then
+		-- 매칭 완료!
+		hideAllUI()
+		currentOpponentId = data.opponentId
+
+		if data.isRevenge then
+			playUISound(UI_SOUNDS.countdown, 0.8, 0.6)
+		end
+
+		-- 잠시 대기 후 카메라 세팅 + 라운드 시작
+		task.wait(1)
+		setSideCamera()
+		task.wait(0.5)
+		startRound()
+
+	elseif action == "opponent_chose" then
+		-- 상대가 선택 완료
+		if not canChoose then
+			result.Text = "결과 계산중..."
+		else
+			result.Text = "상대가 선택 완료! 빨리 고르세요!"
+		end
+
+	elseif action == "pvp_result" then
+		local outcome = data.outcome
+
+		if outcome == "draw" then
+			playUISound(UI_SOUNDS.click, 0.3, 0.8)
+			result.Text = "비겼다! (나: " .. data.myChoice .. " / 상대: " .. data.opChoice .. ") 다시!"
+			title.Text = "다시!"
+			task.wait(1.5)
+			startRound()
+
+		elseif outcome == "win" then
+			frame.Visible = false
+			playSlapEffect(true)
+
+			local winStreak = data.streak or 0
+			if winStreak > 0 then
+				streak = winStreak
+				scoreLabel.Text = "🔥 " .. winStreak .. "연승"
+			end
+
+			task.wait(2)
+
+			if winStreak >= 3 then
+				playUISound(UI_SOUNDS.streak, 0.8, 1)
+				showStreakPopup(winStreak)
+				task.wait(1.5)
+			end
+
+			-- 승리 후 옵션 표시
+			resetCamera()
+			pvpEndFrame.Visible = true
+			if data.revengeSuccess then
+				pvpEndFrame.ResultLabel.Text = "🔥 복수 성공!! " .. data.opponentName .. "을(를) 갈겼다!"
+				pvpEndFrame.ResultLabel.TextColor3 = Color3.fromRGB(255, 100, 30)
+			else
+				pvpEndFrame.ResultLabel.Text = "✌️ 승리! " .. data.opponentName .. "의 뺨을 갈겼다!"
+				pvpEndFrame.ResultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+			end
+			pvpEndFrame.RevengeBtn.Visible = false
+			pvpEndFrame.RematchBtn.Visible = true
+			pvpEndFrame.WaitNote.Visible = false
+
+		elseif outcome == "lose" then
+			frame.Visible = false
+			playSlapEffect(false)
+
+			streak = 0
+			scoreLabel.Text = "연승: 0"
+
+			task.wait(2)
+			playUISound(UI_SOUNDS.lose, 0.8, 0.6)
+
+			-- 패배 후 복수 버튼 표시
+			resetCamera()
+			pvpEndFrame.Visible = true
+			pvpEndFrame.ResultLabel.Text = "💀 패배... " .. data.opponentName .. "에게 뺨을 맞았다!"
+			pvpEndFrame.ResultLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+			pvpEndFrame.RevengeBtn.Visible = true
+			pvpEndFrame.RematchBtn.Visible = false
+			pvpEndFrame.WaitNote.Visible = false
+
+			currentOpponentId = data.opponentId
+		end
+
+	elseif action == "challenge_received" then
+		-- 도전장 수신
+		pendingChallengeFromId = data.fromId
+		challengePopup.Visible = true
+		challengePopup.FromLabel.Text = "'" .. data.fromName .. "'이(가) 복수를 원합니다!"
+		playUISound(UI_SOUNDS.countdown, 1, 0.5)
+
+		-- 15초 후 자동 거절
+		local thisId = data.fromId
+		task.delay(15, function()
+			if pendingChallengeFromId == thisId and challengePopup.Visible then
+				rpsPvP:FireServer({ action = "challenge_reply", fromId = thisId, accepted = false })
+				challengePopup.Visible = false
+				pendingChallengeFromId = nil
+			end
+		end)
+
+	elseif action == "challenge_sent" then
+		-- 도전장 보냄 확인 (대기 UI)
+		-- 이미 pvpEndFrame에서 처리됨
+
+	elseif action == "challenge_declined" then
+		-- 상대가 도전 거절 (도망!)
+		pvpEndFrame.Visible = true
+		pvpEndFrame.ResultLabel.Text = "🐔 " .. data.targetName .. "이(가) 도망쳤습니다!"
+		pvpEndFrame.ResultLabel.TextColor3 = Color3.fromRGB(255, 220, 50)
+		pvpEndFrame.RevengeBtn.Visible = false
+		pvpEndFrame.RematchBtn.Visible = true
+		pvpEndFrame.WaitNote.Visible = false
+
+	elseif action == "challenge_failed" then
+		pvpEndFrame.ResultLabel.Text = data.reason or "도전 실패"
+		pvpEndFrame.RevengeBtn.Visible = false
+		pvpEndFrame.RematchBtn.Visible = true
+		pvpEndFrame.WaitNote.Visible = false
+
+	elseif action == "opponent_left" then
+		hideAllUI()
+		resetCamera()
+		modeSelect.Visible = true
+		currentOpponentId = nil
+
+	elseif action == "queue_joined" then
+		-- 대기열 진입 확인
+		pvpWait.Title.Text = "상대를 찾는 중..."
+
+	elseif action == "queue_left" then
+		-- 대기열 나감 확인 (UI는 이미 처리됨)
+	end
+end)
+
+-----------------------------------------------
+-- 시작: 모드 선택 화면
+-----------------------------------------------
+hideAllUI()
+modeSelect.Visible = true
+scoreLabel.Text = "연승: 0"
