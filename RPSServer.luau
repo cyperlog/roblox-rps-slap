@@ -12,10 +12,7 @@ local SoundService = game:GetService("SoundService")
 -- Roblox 무료 사운드 에셋 사용
 -----------------------------------------------
 local SOUNDS = {
-	slap      = "rbxassetid://5765933873",  -- 찰싹/빡 때리는 소리
-	whoosh    = "rbxassetid://320557563",   -- 날아가는 휘이잉 소리
-	crash     = "rbxassetid://282954522",   -- 쿵! 착지/충돌 소리
-	dramatic  = "rbxassetid://1837756993",  -- 극적 효과음 (올라갈 때)
+	slap = "rbxassetid://5765933873",  -- 찰싹/빡 때리는 소리
 }
 
 local function playSound(soundId, position, volume, pitch)
@@ -196,173 +193,173 @@ local function createSlapEffect(position)
 	task.delay(1.5, function() part:Destroy() end)
 end
 
-local function createLandingEffect(position)
-	local part = Instance.new("Part")
-	part.Size = Vector3.new(1, 1, 1)
-	part.Position = position
-	part.Anchored = true
-	part.CanCollide = false
-	part.Transparency = 1
-	part.Parent = workspace
-
-	local dust = Instance.new("ParticleEmitter")
-	dust.Color = ColorSequence.new(Color3.fromRGB(180, 160, 130))
-	dust.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 1),
-		NumberSequenceKeypoint.new(0.5, 6),
-		NumberSequenceKeypoint.new(1, 0),
-	})
-	dust.Lifetime = NumberRange.new(0.5, 1.2)
-	dust.Speed = NumberRange.new(10, 30)
-	dust.SpreadAngle = Vector2.new(360, 30)
-	dust.Rate = 0
-	dust.Parent = part
-	dust:Emit(60)
-
-	task.delay(2, function() part:Destroy() end)
-end
-
 -----------------------------------------------
--- 다이하드식 뺨 때리기 (CFrame 직접 제어)
--- Humanoid를 PlatformStand로 만들어서 물리 간섭 제거
--- CFrame으로 직접 위치/회전 애니메이션
+-- 머리 위 별 빙빙 도는 이펙트 (만화적 연출)
 -----------------------------------------------
-local function dieHardSlap(character)
-	if not character then return end
+local function createStarsEffect(head)
+	if not head then return end
 
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then return end
+	local starsHolder = Instance.new("Part")
+	starsHolder.Name = "StarsEffect"
+	starsHolder.Size = Vector3.new(0.1, 0.1, 0.1)
+	starsHolder.Anchored = true
+	starsHolder.CanCollide = false
+	starsHolder.Transparency = 1
+	starsHolder.Position = head.Position + Vector3.new(0, 2.5, 0)
+	starsHolder.Parent = workspace
 
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	-- 별 3개 생성 (120도 간격으로 배치)
+	local stars = {}
+	local starColors = {
+		Color3.fromRGB(255, 255, 0),   -- 노랑
+		Color3.fromRGB(255, 150, 0),   -- 주황
+		Color3.fromRGB(255, 255, 100), -- 연노랑
+	}
 
-	-- Humanoid가 움직임을 방해하지 않도록
-	if humanoid then
-		humanoid.PlatformStand = true
+	for i = 1, 3 do
+		local star = Instance.new("Part")
+		star.Name = "Star" .. i
+		star.Size = Vector3.new(0.8, 0.8, 0.2)
+		star.Anchored = true
+		star.CanCollide = false
+		star.Color = starColors[i]
+		star.Material = Enum.Material.Neon
+		star.Shape = Enum.PartType.Ball
+		star.Parent = workspace
+
+		-- 별 파티클 (반짝임)
+		local sparkle = Instance.new("ParticleEmitter")
+		sparkle.Color = ColorSequence.new(starColors[i])
+		sparkle.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.3),
+			NumberSequenceKeypoint.new(0.5, 0.6),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		sparkle.Lifetime = NumberRange.new(0.2, 0.5)
+		sparkle.Speed = NumberRange.new(1, 3)
+		sparkle.Rate = 15
+		sparkle.LightEmission = 1
+		sparkle.Parent = star
+
+		table.insert(stars, star)
 	end
 
-	-- 시작 위치 기록
-	local startPos = root.Position
-	local startCF = root.CFrame
-	local sideDir = startCF.RightVector
-	local backDir = startCF.LookVector * -1
-
-	-- 머리에 파티클 + 빡! 소리
-	local head = character:FindFirstChild("Head")
-	if head then
-		createSlapEffect(head.Position)
-		playSound(SOUNDS.slap, head.Position, 2, 0.8)  -- 빡! (크고 낮게)
-	end
-
-	-- 날아가는 소리 (약간 지연)
-	task.spawn(function()
-		task.wait(0.2)
-		if root and root.Parent then
-			playSound(SOUNDS.whoosh, root.Position, 1.5, 1.2)  -- 휘이잉
-		end
-		task.wait(0.5)
-		if root and root.Parent then
-			playSound(SOUNDS.dramatic, root.Position, 1, 1)  -- 극적 효과
-		end
-	end)
-
-	-- 착지 소리 (타이밍 맞춤)
-	task.spawn(function()
-		task.wait(2.5)
-		if root and root.Parent then
-			playSound(SOUNDS.crash, root.Position, 2.5, 0.7)  -- 쿵!! (크고 묵직하게)
-		end
-	end)
-
-	-- 애니메이션 키프레임
-	local totalDuration = 3.0
-	local peakHeight = 60
-
+	-- 빙빙 도는 애니메이션
+	local radius = 2.0
+	local spinSpeed = 8  -- 빠르게 회전
+	local duration = 3.0
 	local startTime = tick()
 
-	-- Heartbeat로 매 프레임 위치 업데이트
-	local connection
-	connection = RunService.Heartbeat:Connect(function()
-		if not root or not root.Parent then
-			connection:Disconnect()
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		if not head or not head.Parent then
+			conn:Disconnect()
+			for _, s in ipairs(stars) do s:Destroy() end
+			starsHolder:Destroy()
 			return
 		end
 
 		local elapsed = tick() - startTime
-		local t = elapsed / totalDuration -- 0~1 진행도
-
-		if t >= 1 then
-			-- 애니메이션 끝: 바닥에 착지
-			connection:Disconnect()
-			local landPos = startPos + sideDir * 15 + backDir * 8
-			landPos = Vector3.new(landPos.X, startPos.Y, landPos.Z) -- 원래 높이로
-			root.CFrame = CFrame.new(landPos) * CFrame.Angles(math.rad(-80), 0, math.rad(30))
-			root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-			root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-			-- 착지 이펙트
-			createLandingEffect(landPos)
+		if elapsed >= duration then
+			conn:Disconnect()
+			for _, s in ipairs(stars) do s:Destroy() end
+			starsHolder:Destroy()
 			return
 		end
 
-		-- 수평 이동 (옆 + 뒤로)
-		local horizProgress = t  -- 선형
-		local horizOffset = sideDir * 15 * horizProgress + backDir * 8 * horizProgress
-
-		-- 수직 이동 (포물선: 올라갔다 내려옴)
-		local verticalT
-		local height
-
-		if t < 0.15 then
-			-- 1단계 (0~15%): 빡! 맞고 살짝 위로
-			verticalT = t / 0.15
-			height = 5 * verticalT
-		elseif t < 0.45 then
-			-- 2단계 (15~45%): 하늘로 쭈욱 올라감
-			verticalT = (t - 0.15) / 0.30
-			height = 5 + (peakHeight - 5) * verticalT
-		elseif t < 0.60 then
-			-- 3단계 (45~60%): 꼭대기에서 체공 (거의 안 움직임)
-			verticalT = (t - 0.45) / 0.15
-			height = peakHeight - 2 * verticalT  -- 아주 살짝만 내려옴
-		else
-			-- 4단계 (60~100%): 아래로 쿵!!! 추락
-			verticalT = (t - 0.60) / 0.40
-			-- 가속 추락 (제곱 커브)
-			height = (peakHeight - 2) * (1 - verticalT * verticalT)
+		-- 페이드 아웃 (마지막 1초)
+		local fade = 1
+		if elapsed > duration - 1.0 then
+			fade = (duration - elapsed) / 1.0
 		end
 
-		-- 회전 (빙글빙글)
-		local rotX, rotY, rotZ
-		if t < 0.15 then
-			-- 빡! 맞는 순간: 머리가 확 꺾임
-			rotX = math.rad(30) * (t / 0.15)
-			rotY = math.rad(90) * (t / 0.15)
-			rotZ = math.rad(20) * (t / 0.15)
-		elseif t < 0.45 then
-			-- 올라가면서 회전
-			local rt = (t - 0.15) / 0.30
-			rotX = math.rad(30) + math.rad(360) * rt
-			rotY = math.rad(90) + math.rad(180) * rt
-			rotZ = math.rad(20) + math.rad(200) * rt
-		elseif t < 0.60 then
-			-- 체공: 천천히 회전
-			local rt = (t - 0.45) / 0.15
-			rotX = math.rad(390) + math.rad(30) * rt
-			rotY = math.rad(270) + math.rad(20) * rt
-			rotZ = math.rad(220) + math.rad(10) * rt
-		else
-			-- 추락: 빠르게 회전
-			local rt = (t - 0.60) / 0.40
-			rotX = math.rad(420) + math.rad(540) * rt
-			rotY = math.rad(290) + math.rad(360) * rt
-			rotZ = math.rad(230) + math.rad(400) * rt
-		end
+		local centerPos = head.Position + Vector3.new(0, 2.5, 0)
+		starsHolder.Position = centerPos
 
-		local newPos = startPos + horizOffset + Vector3.new(0, height, 0)
-		root.CFrame = CFrame.new(newPos) * CFrame.Angles(rotX, rotY, rotZ)
-		root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-		root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+		-- 위아래 출렁임
+		local bobY = math.sin(elapsed * 4) * 0.3
+
+		for i, star in ipairs(stars) do
+			local angle = elapsed * spinSpeed + (i - 1) * math.rad(120)
+			local x = math.cos(angle) * radius
+			local z = math.sin(angle) * radius
+			star.Position = centerPos + Vector3.new(x, bobY, z)
+			star.Transparency = 1 - fade
+			-- 크기 맥동
+			local pulse = 0.6 + 0.3 * math.sin(elapsed * 10 + i)
+			star.Size = Vector3.new(pulse, pulse, 0.2)
+		end
 	end)
+end
+
+-----------------------------------------------
+-- 목 세바퀴 회전 연출 (Neck Motor6D 활용)
+-----------------------------------------------
+local function spinHead(character)
+	if not character then return end
+
+	local head = character:FindFirstChild("Head")
+	if not head then return end
+
+	-- Neck Motor6D 찾기
+	local neck = nil
+	for _, desc in ipairs(character:GetDescendants()) do
+		if desc:IsA("Motor6D") and desc.Name == "Neck" then
+			neck = desc
+			break
+		end
+	end
+
+	if not neck then return end
+
+	local originalC0 = neck.C0
+	local spinDuration = 0.8  -- 세 바퀴 도는 시간
+	local totalSpins = 3
+	local startTime = tick()
+
+	-- 별 이펙트 시작
+	createStarsEffect(head)
+
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		if not neck or not neck.Parent then
+			conn:Disconnect()
+			return
+		end
+
+		local elapsed = tick() - startTime
+		local t = elapsed / spinDuration
+
+		if t >= 1 then
+			conn:Disconnect()
+			neck.C0 = originalC0
+			return
+		end
+
+		-- 이징: 처음에 빠르고 끝에 느려짐
+		local eased = 1 - (1 - t) * (1 - t)
+		local angle = eased * totalSpins * math.pi * 2
+
+		-- Y축 회전 (고개가 빙글빙글)
+		neck.C0 = originalC0 * CFrame.Angles(0, angle, math.sin(angle * 0.5) * math.rad(15))
+	end)
+end
+
+-----------------------------------------------
+-----------------------------------------------
+-- 코믹 뺨 때리기 (목 세바퀴 + 별 빙빙)
+-- NPC, 플레이어 공통 사용
+-----------------------------------------------
+local function comicSlap(character)
+	if not character then return end
+
+	local head = character:FindFirstChild("Head")
+	if head then
+		createSlapEffect(head.Position)
+		playSound(SOUNDS.slap, head.Position, 2, 0.8)
+	end
+
+	spinHead(character)
 end
 
 -----------------------------------------------
@@ -371,96 +368,13 @@ end
 local function slapNPC()
 	local npc = workspace:FindFirstChild("NPC")
 	if not npc then return end
-	dieHardSlap(npc)
+	comicSlap(npc)
 end
 
------------------------------------------------
--- 플레이어가 맞을 때: 제자리에서 머리 꺾임 → 무릎 꿇기
--- (거의 안 움직임, 카메라 밖으로 안 나감)
------------------------------------------------
 local function slapPlayer(player)
 	local character = player.Character
 	if not character then return end
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		humanoid:TakeDamage(10)
-	end
-
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-
-	local head = character:FindFirstChild("Head")
-	if head then
-		createSlapEffect(head.Position)
-		playSound(SOUNDS.slap, head.Position, 2, 0.9)  -- 빡!
-	end
-
-	if humanoid then
-		humanoid.PlatformStand = true
-	end
-
-	local startCF = root.CFrame
-	local startPos = startCF.Position
-	-- 시작 회전값 보존 (Y축 = 바라보는 방향)
-	local _, startRotY, _ = startCF:ToEulerAnglesYXZ()
-	local totalDuration = 1.2
-	local startTime = tick()
-
-	local connection
-	connection = RunService.Heartbeat:Connect(function()
-		if not root or not root.Parent then
-			connection:Disconnect()
-			return
-		end
-
-		local elapsed = tick() - startTime
-		local t = elapsed / totalDuration
-
-		if t >= 1 then
-			-- 무릎 꿇은 상태로 끝 (제자리)
-			connection:Disconnect()
-			root.CFrame = CFrame.new(startPos.X, startPos.Y - 1, startPos.Z)
-				* CFrame.Angles(0, startRotY, 0)
-				* CFrame.Angles(math.rad(15), 0, math.rad(10))
-			root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-			root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-			return
-		end
-
-		local posY = startPos.Y
-		local rotX = 0
-		local rotZ = 0
-
-		if t < 0.15 then
-			-- 빡! 맞는 순간: 머리가 옆으로 확 꺾임 (제자리)
-			local p = t / 0.15
-			rotX = 0
-			rotZ = math.rad(25) * p  -- 옆으로 확 기울어짐
-		elseif t < 0.4 then
-			-- 충격으로 살짝 흔들림
-			local p = (t - 0.15) / 0.25
-			rotZ = math.rad(25) - math.rad(35) * p  -- 반대쪽으로 흔들
-		elseif t < 0.7 then
-			-- 비틀거림
-			local p = (t - 0.4) / 0.3
-			rotZ = math.rad(-10) + math.rad(15) * p
-			rotX = math.rad(10) * p
-			posY = startPos.Y - 0.3 * p  -- 살짝 내려감
-		else
-			-- 무릎 꿇기
-			local p = (t - 0.7) / 0.3
-			rotZ = math.rad(5) + math.rad(5) * p
-			rotX = math.rad(10) + math.rad(5) * p
-			posY = startPos.Y - 0.3 - 0.7 * p  -- 내려앉음
-		end
-
-		root.CFrame = CFrame.new(startPos.X, posY, startPos.Z)
-			* CFrame.Angles(0, startRotY, 0)
-			* CFrame.Angles(rotX, 0, rotZ)
-		root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-		root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-	end)
+	comicSlap(character)
 end
 
 -----------------------------------------------

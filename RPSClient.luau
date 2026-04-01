@@ -152,67 +152,14 @@ local function impactZoom()
 end
 
 -----------------------------------------------
--- 다이하드 카메라: NPC가 날아가는 걸 따라감
------------------------------------------------
-local function dieHardCamera()
-	local npc = workspace:FindFirstChild("NPC")
-	if not npc then return end
-	local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso")
-	if not npcRoot then return end
-
-	-- 카메라가 NPC를 따라가며 올려다봄
-	local startTime = tick()
-	local duration = 2.5  -- 전체 연출 시간
-
-	while tick() - startTime < duration do
-		local npcPos = npcRoot.Position
-		local elapsed = tick() - startTime
-
-		-- 카메라는 약간 뒤, 옆에서 NPC를 추적
-		local offset
-		if elapsed < 0.8 then
-			-- 올라가는 중: 아래에서 올려다봄
-			offset = Vector3.new(8, -2, 8)
-		elseif elapsed < 1.5 then
-			-- 꼭대기: 옆에서 수평으로
-			offset = Vector3.new(10, 0, 5)
-		else
-			-- 떨어지는 중: 위에서 내려다봄
-			offset = Vector3.new(6, 5, 6)
-		end
-
-		local cameraPos = npcPos + offset
-		camera.CFrame = CFrame.lookAt(cameraPos, npcPos)
-		task.wait()
-	end
-end
-
------------------------------------------------
--- 빡! 때리기 연출 (다이하드 스타일)
+-- 빡! 때리기 연출 (코믹 스타일)
 -----------------------------------------------
 local function playSlapEffect(isPlayerWin)
-	if isPlayerWin then
-		-- 빡! 순간: 슬로모션 + 플래시 + 흔들림
-		task.spawn(function() slowMotion(0.2, 0.2) end)
-		task.wait(0.1)
-		hitFlash(Color3.fromRGB(255, 100, 50))
-		impactZoom()
-		task.spawn(function() shakeCamera(2, 0.4) end)
-		task.wait(0.3)
-
-		-- 다이하드 카메라: NPC 따라감 (하늘로 → 체공 → 추락)
-		task.spawn(function() dieHardCamera() end)
-
-		-- 착지 순간 다시 흔들림 + 플래시
-		task.wait(2)
-		hitFlash(Color3.fromRGB(255, 200, 50))
-		task.spawn(function() shakeCamera(3, 0.6) end)
-	else
-		-- 내가 맞을 때
-		hitFlash(Color3.fromRGB(255, 0, 0))
-		task.spawn(function() shakeCamera(2, 0.7) end)
-		task.spawn(function() slowMotion(0.3, 0.2) end)
-	end
+	-- 빡! 순간: 플래시 + 흔들림 + 슬로모션
+	hitFlash(isPlayerWin and Color3.fromRGB(255, 100, 50) or Color3.fromRGB(255, 0, 0))
+	task.spawn(function() shakeCamera(2, 0.4) end)
+	task.spawn(function() slowMotion(0.2, 0.15) end)
+	impactZoom()
 end
 
 -----------------------------------------------
