@@ -1278,6 +1278,91 @@ shopFrame:WaitForChild("CloseBtn").MouseButton1Click:Connect(function()
 	modeSelect.Visible = true
 end)
 
+-- ★ 스킨 미리보기
+local previewPart = nil
+local function previewSkin(color1, color2)
+	-- 기존 미리보기 정리
+	if previewPart and previewPart.Parent then previewPart:Destroy() end
+
+	local character = player.Character
+	if not character then return end
+	local head = character:FindFirstChild("Head")
+	if not head then return end
+
+	-- 미리보기 파트 (머리 앞에 생성)
+	local pos = head.Position + head.CFrame.LookVector * 3 + Vector3.new(0, 1, 0)
+	previewPart = Instance.new("Part")
+	previewPart.Size = Vector3.new(1, 1, 1)
+	previewPart.Position = pos
+	previewPart.Anchored = true
+	previewPart.CanCollide = false
+	previewPart.Transparency = 1
+	previewPart.Parent = workspace
+
+	-- 메인 파티클
+	local particle = Instance.new("ParticleEmitter")
+	particle.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 100)),
+		ColorSequenceKeypoint.new(0.3, color1),
+		ColorSequenceKeypoint.new(1, color2),
+	})
+	particle.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.5),
+		NumberSequenceKeypoint.new(0.3, 3),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	particle.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.5, 0.2),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	particle.Lifetime = NumberRange.new(0.3, 0.8)
+	particle.Speed = NumberRange.new(10, 25)
+	particle.SpreadAngle = Vector2.new(360, 360)
+	particle.LightEmission = 0.8
+	particle.Rate = 0
+	particle.Parent = previewPart
+	particle:Emit(40)
+
+	-- 충격파 링
+	local ring = Instance.new("Part")
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Size = Vector3.new(0.2, 1, 1)
+	ring.CFrame = CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.Material = Enum.Material.Neon
+	ring.Color = color1
+	ring.Transparency = 0.3
+	ring.Parent = previewPart
+
+	local startTime = tick()
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		local t = (tick() - startTime) / 0.5
+		if t >= 1 then
+			conn:Disconnect()
+			ring:Destroy()
+			return
+		end
+		local size = 1 + t * 8
+		ring.Size = Vector3.new(0.2, size, size)
+		ring.Transparency = 0.3 + t * 0.7
+	end)
+
+	-- 임팩트 텍스트 (스킨 색상)
+	task.spawn(function()
+		showImpactText("퍽!", color1)
+	end)
+
+	playUISound(UI_SOUNDS.impact, 0.6, 1)
+
+	-- 2초 후 정리
+	task.delay(2, function()
+		if previewPart and previewPart.Parent then previewPart:Destroy() end
+	end)
+end
+
 rpsSkin.OnClientEvent:Connect(function(data)
 	if typeof(data) ~= "table" then return end
 
@@ -1341,6 +1426,29 @@ rpsSkin.OnClientEvent:Connect(function(data)
 			descLabel.ZIndex = 33
 			descLabel.Parent = item
 
+			-- 미리보기 버튼
+			local prevBtn = Instance.new("TextButton")
+			prevBtn.Size = UDim2.new(0, 55, 0, 34)
+			prevBtn.Position = UDim2.new(1, -180, 0.5, -17)
+			prevBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+			prevBtn.Text = "▶"
+			prevBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+			prevBtn.TextSize = 18
+			prevBtn.Font = Enum.Font.GothamBold
+			prevBtn.BorderSizePixel = 0
+			prevBtn.ZIndex = 33
+			prevBtn.Parent = item
+			local pbc = Instance.new("UICorner")
+			pbc.CornerRadius = UDim.new(0, 8)
+			pbc.Parent = prevBtn
+
+			local skinColor1 = skin.color1
+			local skinColor2 = skin.color2
+			prevBtn.MouseButton1Click:Connect(function()
+				previewSkin(skinColor1, skinColor2)
+			end)
+
+			-- 구매/장착 버튼
 			local btn = Instance.new("TextButton")
 			btn.Size = UDim2.new(0, 100, 0, 34)
 			btn.Position = UDim2.new(1, -115, 0.5, -17)
