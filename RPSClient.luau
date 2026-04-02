@@ -54,11 +54,24 @@ battleBgm.Looped = true
 battleBgm.Playing = false
 battleBgm.Parent = screenGui
 
+-- 승리/패배 전용 사운드 (별도 관리)
+local resultSound = Instance.new("Sound")
+resultSound.Name = "ResultSound"
+resultSound.Volume = 0.7
+resultSound.Looped = false
+resultSound.Parent = screenGui
+
 -----------------------------------------------
 -- BGM 전환
 -----------------------------------------------
+local function stopResultSound()
+	resultSound.Playing = false
+	resultSound.TimePosition = 0
+end
+
 local function switchBGM(mode)
 	if mode == "battle" then
+		stopResultSound()
 		TweenService:Create(bgm, TweenInfo.new(0.5), { Volume = 0 }):Play()
 		task.delay(0.5, function()
 			bgm.Playing = false
@@ -67,6 +80,7 @@ local function switchBGM(mode)
 			TweenService:Create(battleBgm, TweenInfo.new(0.5), { Volume = 0.5 }):Play()
 		end)
 	elseif mode == "lobby" then
+		stopResultSound()
 		TweenService:Create(battleBgm, TweenInfo.new(0.5), { Volume = 0 }):Play()
 		task.delay(0.5, function()
 			battleBgm.Playing = false
@@ -74,6 +88,22 @@ local function switchBGM(mode)
 			bgm.Playing = true
 			TweenService:Create(bgm, TweenInfo.new(0.5), { Volume = 0.4 }):Play()
 		end)
+	elseif mode == "win" then
+		-- 대전 BGM 끄고 승리 사운드
+		TweenService:Create(battleBgm, TweenInfo.new(0.3), { Volume = 0 }):Play()
+		task.delay(0.3, function() battleBgm.Playing = false end)
+		stopResultSound()
+		resultSound.SoundId = "rbxassetid://138911503838724"
+		resultSound.Volume = 0.7
+		resultSound.Playing = true
+	elseif mode == "lose" then
+		-- 대전 BGM 끄고 패배 사운드
+		TweenService:Create(battleBgm, TweenInfo.new(0.3), { Volume = 0 }):Play()
+		task.delay(0.3, function() battleBgm.Playing = false end)
+		stopResultSound()
+		resultSound.SoundId = "rbxassetid://136335820421357"
+		resultSound.Volume = 0.7
+		resultSound.Playing = true
 	end
 end
 
@@ -817,10 +847,10 @@ rpsResult.OnClientEvent:Connect(function(data)
 			showWinBanner("승리! " .. selectedNPCName .. "의 뺨을 갈겼다!", true)
 		end)
 
-		-- 승리 카메라
+		-- 승리 카메라 + 승리 사운드
 		setCameraAngle("victory")
+		switchBGM("win")
 
-		playUISound(UI_SOUNDS.streak, 0.8, 1)
 		showStreakPopup(streak)
 		task.wait(2)
 
@@ -840,7 +870,7 @@ rpsResult.OnClientEvent:Connect(function(data)
 		end)
 
 		setCameraAngle("defeat")
-		playUISound(UI_SOUNDS.lose, 0.8, 0.6)
+		switchBGM("lose")
 
 		frame.Visible = true
 		title.Text = "게임 오버!"
@@ -865,15 +895,18 @@ rpsAnnounce.OnClientEvent:Connect(function(msg)
 	announceBar.Text = msg
 	announceBar.Visible = true
 	announceBar.BackgroundTransparency = 0.3
+	announceBar.TextTransparency = 0
 
 	task.delay(4, function()
 		if announceBar.Text == msg then
 			TweenService:Create(announceBar, TweenInfo.new(1), {
 				BackgroundTransparency = 1,
+				TextTransparency = 1,
 			}):Play()
 			task.delay(1, function()
 				if announceBar.Text == msg then
 					announceBar.Visible = false
+					announceBar.TextTransparency = 0
 				end
 			end)
 		end
@@ -994,9 +1027,9 @@ rpsPvP.OnClientEvent:Connect(function(data)
 			end)
 
 			setCameraAngle("victory")
+			switchBGM("win")
 
 			if winStreak >= 3 then
-				playUISound(UI_SOUNDS.streak, 0.8, 1)
 				showStreakPopup(winStreak)
 				task.wait(1.5)
 			else
@@ -1032,7 +1065,7 @@ rpsPvP.OnClientEvent:Connect(function(data)
 			end)
 
 			setCameraAngle("defeat")
-			playUISound(UI_SOUNDS.lose, 0.8, 0.6)
+			switchBGM("lose")
 
 			task.wait(1.5)
 
