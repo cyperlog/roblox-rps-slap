@@ -82,6 +82,86 @@ local npcStyles = {
 }
 
 -----------------------------------------------
+-- ★ NPC AI 시스템
+-----------------------------------------------
+local playerHistory = {} -- playerId → {choice, choice, ...}
+
+local function getNPCChoice(npcName, playerId)
+	local history = playerHistory[playerId] or {}
+
+	if npcName == "학생" then
+		-- 쉬움: 완전 랜덤
+		return choicesList[math.random(1, 3)]
+
+	elseif npcName == "건달" then
+		-- 공격적: 바위 50%, 가위 30%, 보 20%
+		local r = math.random(100)
+		if r <= 50 then return "바위"
+		elseif r <= 80 then return "가위"
+		else return "보" end
+
+	elseif npcName == "할아버지" then
+		-- 느긋: 보 50%, 바위 30%, 가위 20%
+		local r = math.random(100)
+		if r <= 50 then return "보"
+		elseif r <= 80 then return "바위"
+		else return "가위" end
+
+	elseif npcName == "로봇" then
+		-- 분석형: 플레이어가 가장 많이 낸 걸 카운터 (40% 확률)
+		if #history >= 3 then
+			local counts = { ["가위"] = 0, ["바위"] = 0, ["보"] = 0 }
+			for _, c in ipairs(history) do counts[c] = (counts[c] or 0) + 1 end
+			local maxC, maxN = "가위", 0
+			for c, n in pairs(counts) do
+				if n > maxN then maxC, maxN = c, n end
+			end
+			if math.random(100) <= 40 then
+				-- 가장 많이 낸 걸 이기는 패
+				if maxC == "가위" then return "바위"
+				elseif maxC == "바위" then return "보"
+				else return "가위" end
+			end
+		end
+		return choicesList[math.random(1, 3)]
+
+	elseif npcName == "닌자" then
+		-- 어려움: 직전 선택을 카운터 (60% 확률)
+		if #history >= 1 then
+			local last = history[#history]
+			if math.random(100) <= 60 then
+				if last == "가위" then return "바위"
+				elseif last == "바위" then return "보"
+				else return "가위" end
+			end
+		end
+		return choicesList[math.random(1, 3)]
+
+	elseif npcName == "광대" then
+		-- 카오스: 따라하기 30%, 카운터 25%, 랜덤 45%
+		if #history >= 1 then
+			local last = history[#history]
+			local r = math.random(100)
+			if r <= 30 then
+				return last -- 따라하기 (비김)
+			elseif r <= 55 then
+				if last == "가위" then return "바위"
+				elseif last == "바위" then return "보"
+				else return "가위" end
+			end
+		end
+		return choicesList[math.random(1, 3)]
+	end
+
+	return choicesList[math.random(1, 3)]
+end
+
+-----------------------------------------------
+-- ★ 3판 2선승 상태 (싱글)
+-----------------------------------------------
+local soloMatchState = {} -- playerId → {playerWins, npcWins, npcName, round}
+
+-----------------------------------------------
 -- PvP 상태
 -----------------------------------------------
 local pvpQueue = {}
@@ -698,6 +778,9 @@ local function startPvPMatch(playerA, playerB, isRevenge)
 		choiceB = nil,
 		state = "choosing",
 		isRevenge = isRevenge or false,
+		winsA = 0,
+		winsB = 0,
+		round = 1,
 	}
 	playerMatch[playerA] = matchId
 	playerMatch[playerB] = matchId
@@ -755,8 +838,6 @@ local function resolvePvPMatch(matchId)
 	if not match then return end
 	if not match.choiceA or not match.choiceB then return end
 
-	match.state = "resolved"
-
 	local pA = match.playerA
 	local pB = match.playerB
 	local cA = match.choiceA
@@ -771,83 +852,111 @@ local function resolvePvPMatch(matchId)
 		outcome = "b_wins"
 	end
 
+	-- 비김: 같은 라운드 다시
 	if outcome == "draw" then
-		rpsPvP:FireClient(pA, { action = "pvp_result", outcome = "draw", myChoice = cA, opChoice = cB })
-		rpsPvP:FireClient(pB, { action = "pvp_result", outcome = "draw", myChoice = cB, opChoice = cA })
+		rpsPvP:FireClient(pA, { action = "pvp_result", outcome = "draw", myChoice = cA, opChoice = cB,
+			winsMe = match.winsA, winsOp = match.winsB, round = match.round })
+		rpsPvP:FireClient(pB, { action = "pvp_result", outcome = "draw", myChoice = cB, opChoice = cA,
+			winsMe = match.winsB, winsOp = match.winsA, round = match.round })
 		match.choiceA = nil
 		match.choiceB = nil
 		match.state = "choosing"
 		return
 	end
 
-	local winner, loser, winChoice, loseChoice
+	-- 라운드 승자 결정
+	local winner, loser
 	if outcome == "a_wins" then
 		winner, loser = pA, pB
-		winChoice, loseChoice = cA, cB
+		match.winsA += 1
 	else
 		winner, loser = pB, pA
-		winChoice, loseChoice = cB, cA
+		match.winsB += 1
 	end
 
-	pvpStreaks[winner.UserId] = (pvpStreaks[winner.UserId] or 0) + 1
-	pvpStreaks[loser.UserId] = 0
-	addLoss(loser.UserId, winner.UserId)
+	local winsW = (winner == pA) and match.winsA or match.winsB
+	local winsL = (loser == pA) and match.winsA or match.winsB
+	local matchOver = winsW >= 2
 
-	local winStreak = pvpStreaks[winner.UserId]
-	local sameOpLosses = getLosses(loser.UserId, winner.UserId)
-	local revengeSuccess = match.isRevenge and (lastDefeatedBy[winner.UserId] == loser)
-
-	lastDefeatedBy[loser.UserId] = winner
-
-	local bubbleText, announceExtra, streakHumiliation = getHumiliationData(
-		winStreak, sameOpLosses, revengeSuccess
-	)
-
-	-- ★ 개선: 승자가 패자를 때림!
+	-- 라운드 뺨때리기 연출
 	if winner.Character and loser.Character then
 		comicSlap(winner.Character, loser.Character)
 	end
-	showHumiliationBubble(loser.Character, bubbleText, 4)
 
-	local announceMsg = "🔥 " .. winner.DisplayName .. "이(가) " .. loser.DisplayName .. "의 뺨을 갈겼습니다!" .. announceExtra
-	if winStreak >= 3 then
-		announceMsg = announceMsg .. " (" .. winStreak .. "연승!)"
+	if not matchOver then
+		-- ★ 라운드 승리 (매치 계속)
+		rpsPvP:FireClient(winner, { action = "pvp_round", outcome = "win",
+			myChoice = (winner == pA) and cA or cB, opChoice = (winner == pA) and cB or cA,
+			winsMe = winsW, winsOp = winsL, round = match.round,
+			opponentName = loser.DisplayName })
+		rpsPvP:FireClient(loser, { action = "pvp_round", outcome = "lose",
+			myChoice = (loser == pA) and cA or cB, opChoice = (loser == pA) and cB or cA,
+			winsMe = winsL, winsOp = winsW, round = match.round,
+			opponentName = winner.DisplayName })
+
+		-- 다음 라운드 준비
+		match.round += 1
+		match.choiceA = nil
+		match.choiceB = nil
+		match.state = "choosing"
+		-- 위치 리셋
+		task.delay(1.5, function()
+			if pA.Character then teleportCharacter(pA.Character, CFRAME_A) end
+			if pB.Character then teleportCharacter(pB.Character, CFRAME_B) end
+		end)
+	else
+		-- ★ 매치 종료!
+		match.state = "resolved"
+
+		pvpStreaks[winner.UserId] = (pvpStreaks[winner.UserId] or 0) + 1
+		pvpStreaks[loser.UserId] = 0
+		addLoss(loser.UserId, winner.UserId)
+
+		local winStreak = pvpStreaks[winner.UserId]
+		local sameOpLosses = getLosses(loser.UserId, winner.UserId)
+		local revengeSuccess = match.isRevenge and (lastDefeatedBy[winner.UserId] == loser)
+		lastDefeatedBy[loser.UserId] = winner
+
+		local bubbleText, announceExtra, streakHumiliation = getHumiliationData(
+			winStreak, sameOpLosses, revengeSuccess
+		)
+		showHumiliationBubble(loser.Character, bubbleText, 4)
+
+		local announceMsg = "🔥 " .. winner.DisplayName .. "이(가) " .. loser.DisplayName .. "의 뺨을 갈겼습니다!" .. announceExtra
+		if winStreak >= 3 then
+			announceMsg = announceMsg .. " (" .. winStreak .. "연승!)"
+		end
+		announce(announceMsg)
+
+		if match.isRevenge and not revengeSuccess then
+			announce("😂 " .. loser.DisplayName .. " 복수도 실패ㅋㅋ")
+		end
+
+		rpsPvP:FireClient(winner, {
+			action = "pvp_result", outcome = "win",
+			myChoice = (winner == pA) and cA or cB,
+			opChoice = (winner == pA) and cB or cA,
+			winsMe = winsW, winsOp = winsL,
+			streak = winStreak, humiliation = bubbleText,
+			streakHumiliation = streakHumiliation,
+			opponentName = loser.DisplayName, opponentId = loser.UserId,
+			revengeSuccess = revengeSuccess,
+		})
+		rpsPvP:FireClient(loser, {
+			action = "pvp_result", outcome = "lose",
+			myChoice = (loser == pA) and cA or cB,
+			opChoice = (loser == pA) and cB or cA,
+			winsMe = winsL, winsOp = winsW,
+			streak = 0, humiliation = bubbleText,
+			streakHumiliation = streakHumiliation,
+			opponentName = winner.DisplayName, opponentId = winner.UserId,
+			canRevenge = true,
+		})
+
+		playerMatch[pA] = nil
+		playerMatch[pB] = nil
+		pvpMatches[matchId] = nil
 	end
-	announce(announceMsg)
-
-	if match.isRevenge and not revengeSuccess then
-		announce("😂 " .. loser.DisplayName .. " 복수도 실패ㅋㅋ")
-	end
-
-	rpsPvP:FireClient(winner, {
-		action = "pvp_result",
-		outcome = "win",
-		myChoice = (winner == pA) and cA or cB,
-		opChoice = (winner == pA) and cB or cA,
-		streak = winStreak,
-		humiliation = bubbleText,
-		streakHumiliation = streakHumiliation,
-		opponentName = loser.DisplayName,
-		opponentId = loser.UserId,
-		revengeSuccess = revengeSuccess,
-	})
-
-	rpsPvP:FireClient(loser, {
-		action = "pvp_result",
-		outcome = "lose",
-		myChoice = (loser == pA) and cA or cB,
-		opChoice = (loser == pA) and cB or cA,
-		streak = 0,
-		humiliation = bubbleText,
-		streakHumiliation = streakHumiliation,
-		opponentName = winner.DisplayName,
-		opponentId = winner.UserId,
-		canRevenge = true,
-	})
-
-	playerMatch[pA] = nil
-	playerMatch[pB] = nil
-	pvpMatches[matchId] = nil
 end
 
 -----------------------------------------------
@@ -954,6 +1063,15 @@ changeNPC.OnServerEvent:Connect(function(player, npcName)
 	if npcStyles[npcName] then
 		resetNPCPositions(player.Character)
 		changeNPCAppearance(npcName)
+
+		-- ★ 3판 2선승 매치 초기화
+		soloMatchState[player.UserId] = {
+			playerWins = 0,
+			npcWins = 0,
+			npcName = npcName,
+			round = 1,
+		}
+		playerHistory[player.UserId] = {}
 	end
 end)
 
@@ -964,26 +1082,84 @@ end)
 rpsChoice.OnServerEvent:Connect(function(player, playerChoice)
 	if not validChoices[playerChoice] then return end
 
-	local npcChoice = choicesList[math.random(1, 3)]
-	local outcome
+	local state = soloMatchState[player.UserId]
+	if not state then
+		-- 매치 상태 없으면 기본 생성
+		state = { playerWins = 0, npcWins = 0, npcName = "학생", round = 1 }
+		soloMatchState[player.UserId] = state
+		playerHistory[player.UserId] = {}
+	end
 
+	-- ★ NPC AI로 선택
+	local npcChoice = getNPCChoice(state.npcName, player.UserId)
+
+	-- 히스토리 기록
+	if not playerHistory[player.UserId] then playerHistory[player.UserId] = {} end
+	table.insert(playerHistory[player.UserId], playerChoice)
+
+	local outcome
 	if playerChoice == npcChoice then
 		outcome = "draw"
 	elseif winTable[playerChoice] == npcChoice then
 		outcome = "win"
-		soloStreak[player.UserId] = (soloStreak[player.UserId] or 0) + 1
+		state.playerWins += 1
 		slapNPC(player)
 	else
 		outcome = "lose"
-		soloStreak[player.UserId] = 0
+		state.npcWins += 1
 		slapPlayerSolo(player)
 	end
 
-	rpsResult:FireClient(player, {
-		outcome = outcome,
-		npcChoice = npcChoice,
-		playerChoice = playerChoice,
-	})
+	local matchOver = state.playerWins >= 2 or state.npcWins >= 2
+
+	if outcome == "draw" then
+		-- 비김: 같은 라운드 다시
+		rpsResult:FireClient(player, {
+			type = "round",
+			outcome = "draw",
+			npcChoice = npcChoice,
+			playerChoice = playerChoice,
+			playerWins = state.playerWins,
+			npcWins = state.npcWins,
+			round = state.round,
+		})
+	elseif not matchOver then
+		-- ★ 라운드 승/패 (매치 계속)
+		rpsResult:FireClient(player, {
+			type = "round",
+			outcome = outcome,
+			npcChoice = npcChoice,
+			playerChoice = playerChoice,
+			playerWins = state.playerWins,
+			npcWins = state.npcWins,
+			round = state.round,
+		})
+		state.round += 1
+		-- 다음 라운드 전 위치 리셋
+		task.delay(1.5, function()
+			resetNPCPositions(player.Character)
+		end)
+	else
+		-- ★ 매치 종료!
+		local finalOutcome = state.playerWins >= 2 and "win" or "lose"
+
+		if finalOutcome == "win" then
+			soloStreak[player.UserId] = (soloStreak[player.UserId] or 0) + 1
+		else
+			soloStreak[player.UserId] = 0
+		end
+
+		rpsResult:FireClient(player, {
+			type = "match",
+			outcome = finalOutcome,
+			npcChoice = npcChoice,
+			playerChoice = playerChoice,
+			playerWins = state.playerWins,
+			npcWins = state.npcWins,
+			round = state.round,
+		})
+		soloMatchState[player.UserId] = nil
+	end
 end)
 
 -----------------------------------------------
@@ -1008,6 +1184,8 @@ Players.PlayerRemoving:Connect(function(player)
 
 	lastDefeatedBy[player.UserId] = nil
 	pvpStreaks[player.UserId] = nil
+	soloMatchState[player.UserId] = nil
+	playerHistory[player.UserId] = nil
 end)
 
 -----------------------------------------------

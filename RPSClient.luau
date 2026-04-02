@@ -161,6 +161,9 @@ local vsOverlay = screenGui:WaitForChild("VSOverlay")
 local countdownLabel = screenGui:WaitForChild("CountdownLabel")
 local impactText = screenGui:WaitForChild("ImpactText")
 local winBanner = screenGui:WaitForChild("WinBanner")
+local roundFrame = screenGui:WaitForChild("RoundScore")
+local roundLabel = roundFrame:WaitForChild("RoundLabel")
+local roundDots = roundFrame:WaitForChild("RoundDots")
 
 -----------------------------------------------
 -- 상태 변수
@@ -648,6 +651,25 @@ local function hideAllUI()
 	countdownLabel.Visible = false
 	impactText.Visible = false
 	winBanner.Visible = false
+	roundFrame.Visible = false
+end
+
+-----------------------------------------------
+-- ★ 라운드 스코어 표시
+-----------------------------------------------
+local function updateRoundScore(myWins, opWins, round)
+	roundFrame.Visible = true
+
+	roundLabel.Text = "라운드 " .. round .. " / 3"
+
+	-- 시각적 스코어: ● = 승리, ○ = 미정
+	local myDots = string.rep("●", myWins) .. string.rep("○", 2 - myWins)
+	local opDots = string.rep("●", opWins) .. string.rep("○", 2 - opWins)
+	roundDots.Text = myDots .. "  VS  " .. opDots
+end
+
+local function hideRoundScore()
+	roundFrame.Visible = false
 end
 
 -----------------------------------------------
@@ -710,6 +732,9 @@ end
 -----------------------------------------------
 local function playCinematicIntro(opponentName)
 	local myName = player.DisplayName
+
+	-- 라운드 스코어 초기화
+	updateRoundScore(0, 0, 1)
 
 	-- 대전 BGM으로 전환
 	switchBGM("battle")
@@ -809,7 +834,19 @@ charSelect:WaitForChild("StartBtn").MouseButton1Click:Connect(function()
 	local changeNPCEvt = ReplicatedStorage:WaitForChild("ChangeNPC")
 	changeNPCEvt:FireServer(selectedNPCName)
 
-	task.wait(1)
+	-- NPC 외형 변경 완료 대기
+	task.wait(2)
+
+	-- NPC 루트가 준비될 때까지 확인
+	local npc = workspace:WaitForChild("NPC", 5)
+	if npc then
+		local tries = 0
+		while not npc:FindFirstChild("HumanoidRootPart") and tries < 20 do
+			task.wait(0.1)
+			tries += 1
+		end
+	end
+
 	inGame = true
 	currentOpponentName = selectedNPCName
 
@@ -826,6 +863,13 @@ end)
 rpsResult.OnClientEvent:Connect(function(data)
 	local outcome = data.outcome
 	local npcChoice = data.npcChoice
+	local msgType = data.type or "match" -- "round" 또는 "match"
+	local pWins = data.playerWins or 0
+	local nWins = data.npcWins or 0
+	local round = data.round or 1
+
+	-- 스코어 업데이트
+	updateRoundScore(pWins, nWins, round)
 
 	if outcome == "draw" then
 		playUISound(UI_SOUNDS.click, 0.3, 0.8)
@@ -834,57 +878,80 @@ rpsResult.OnClientEvent:Connect(function(data)
 		task.wait(1.5)
 		startRound()
 
-	elseif outcome == "win" then
-		streak = streak + 1
+	elseif msgType == "round" then
+		-- ★ 라운드 승/패 (매치 계속!)
 		frame.Visible = false
 
-		-- ★ 강화된 타격 연출
-		playSlapEffect(true)
-		task.wait(1)
+		if outcome == "win" then
+			playSlapEffect(true)
+			task.wait(1)
+			result.Text = "라운드 승리! (" .. pWins .. " - " .. nWins .. ")"
+		else
+			playSlapEffect(false)
+			task.wait(1)
+			result.Text = "라운드 패배... (" .. pWins .. " - " .. nWins .. ")"
+		end
 
-		-- ★ 승리 배너
-		task.spawn(function()
-			showWinBanner("승리! " .. selectedNPCName .. "의 뺨을 갈겼다!", true)
-		end)
-
-		-- 승리 카메라 + 승리 사운드
-		setCameraAngle("victory")
-		switchBGM("win")
-
-		showStreakPopup(streak)
-		task.wait(2)
-
-		resetCamera()
-		charSelect.Visible = true
-
-	elseif outcome == "lose" then
-		frame.Visible = false
-
-		-- ★ 강화된 피격 연출
-		playSlapEffect(false)
-		task.wait(1)
-
-		-- ★ 패배 배너
-		task.spawn(function()
-			showWinBanner("패배... " .. selectedNPCName .. "에게 뺨을 맞았다!", false)
-		end)
-
-		setCameraAngle("defeat")
-		switchBGM("lose")
-
+		-- 잠깐 결과 보여주고 다음 라운드
 		frame.Visible = true
-		title.Text = "게임 오버!"
-		result.Text = "최종 기록: " .. streak .. "연승"
-		scoreLabel.Text = "최종: " .. streak .. "연승"
+		title.Text = "라운드 " .. (round + 1)
+		task.wait(1.5)
+		-- 카메라 리셋 후 사이드뷰
+		setCameraAngle("side_close")
+		task.wait(0.5)
+		updateRoundScore(pWins, nWins, round + 1)
+		startRound()
 
-		task.wait(3)
+	elseif msgType == "match" then
+		-- ★ 매치 종료! (3판 2선승 확정)
+		if outcome == "win" then
+			streak = streak + 1
+			frame.Visible = false
 
-		streak = 0
-		scoreLabel.Text = "연승: 0"
-		frame.Visible = false
-		resetCamera()
-		switchBGM("lobby")
-		modeSelect.Visible = true
+			playSlapEffect(true)
+			task.wait(1)
+
+			task.spawn(function()
+				showWinBanner(pWins .. " : " .. nWins .. " 승리! " .. selectedNPCName .. "의 뺨을 갈겼다!", true)
+			end)
+
+			setCameraAngle("victory")
+			switchBGM("win")
+			showStreakPopup(streak)
+			task.wait(2)
+
+			hideRoundScore()
+			resetCamera()
+			charSelect.Visible = true
+
+		elseif outcome == "lose" then
+			frame.Visible = false
+
+			playSlapEffect(false)
+			task.wait(1)
+
+			task.spawn(function()
+				showWinBanner(pWins .. " : " .. nWins .. " 패배... " .. selectedNPCName .. "에게 뺨을 맞았다!", false)
+			end)
+
+			setCameraAngle("defeat")
+			switchBGM("lose")
+
+			frame.Visible = true
+			title.Text = "게임 오버!"
+			result.Text = "최종 기록: " .. streak .. "연승"
+			scoreLabel.Text = "최종: " .. streak .. "연승"
+
+			task.wait(3)
+
+			streak = 0
+			scoreLabel.Text = "연승: 0"
+			frame.Visible = false
+			hideRoundScore()
+			resetCamera()
+			switchBGM("lobby")
+			modeSelect.Visible = true
+		end
 	end
 end)
 
@@ -992,10 +1059,40 @@ rpsPvP.OnClientEvent:Connect(function(data)
 			result.Text = "상대가 선택 완료! 빨리 고르세요!"
 		end
 
+	elseif action == "pvp_round" then
+		-- ★ PvP 라운드 승/패 (매치 계속)
+		local outcome = data.outcome
+		updateRoundScore(data.winsMe or 0, data.winsOp or 0, data.round or 1)
+
+		frame.Visible = false
+		if outcome == "win" then
+			playSlapEffect(true)
+			task.wait(1)
+			result.Text = "라운드 승리! (" .. (data.winsMe or 0) .. " - " .. (data.winsOp or 0) .. ")"
+		else
+			playSlapEffect(false)
+			task.wait(1)
+			result.Text = "라운드 패배... (" .. (data.winsMe or 0) .. " - " .. (data.winsOp or 0) .. ")"
+		end
+
+		frame.Visible = true
+		title.Text = "라운드 " .. ((data.round or 1) + 1)
+		task.wait(1.5)
+		setCameraAngle("side_close")
+		task.wait(0.5)
+		updateRoundScore(data.winsMe or 0, data.winsOp or 0, (data.round or 1) + 1)
+		startRound()
+
 	elseif action == "pvp_result" then
 		local outcome = data.outcome
 
+		-- 스코어 표시
+		if data.winsMe then
+			updateRoundScore(data.winsMe, data.winsOp or 0, 3)
+		end
+
 		if outcome == "draw" then
+			if data.round then updateRoundScore(data.winsMe or 0, data.winsOp or 0, data.round) end
 			playUISound(UI_SOUNDS.click, 0.3, 0.8)
 			result.Text = "비겼다! (나: " .. data.myChoice .. " / 상대: " .. data.opChoice .. ") 다시!"
 			title.Text = "다시!"
@@ -1036,6 +1133,7 @@ rpsPvP.OnClientEvent:Connect(function(data)
 				task.wait(1.5)
 			end
 
+			hideRoundScore()
 			resetCamera()
 			pvpEndFrame.Visible = true
 			if data.revengeSuccess then
@@ -1069,6 +1167,7 @@ rpsPvP.OnClientEvent:Connect(function(data)
 
 			task.wait(1.5)
 
+			hideRoundScore()
 			resetCamera()
 			pvpEndFrame.Visible = true
 			pvpEndFrame.ResultLabel.Text = "패배... " .. data.opponentName .. "에게 뺨을 맞았다!"

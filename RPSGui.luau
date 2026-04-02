@@ -537,6 +537,47 @@ addCorner(score, 12)
 addStroke(score, Color3.fromRGB(255, 200, 50), 1.5)
 
 -----------------------------------------------
+-- ★ 라운드 스코어 (3판 2선승)
+-----------------------------------------------
+local roundFrame = Instance.new("Frame")
+roundFrame.Name = "RoundScore"
+roundFrame.Size = UDim2.new(0, 280, 0, 65)
+roundFrame.Position = UDim2.new(0.5, -140, 0, 58)
+roundFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+roundFrame.BackgroundTransparency = 0.1
+roundFrame.BorderSizePixel = 0
+roundFrame.Visible = false
+roundFrame.ZIndex = 25
+roundFrame.Parent = screenGui
+
+addCorner(roundFrame, 12)
+addStroke(roundFrame, Color3.fromRGB(255, 150, 50), 1.5)
+
+local roundLabel = Instance.new("TextLabel")
+roundLabel.Name = "RoundLabel"
+roundLabel.Size = UDim2.new(1, 0, 0, 25)
+roundLabel.Position = UDim2.new(0, 0, 0, 5)
+roundLabel.BackgroundTransparency = 1
+roundLabel.Text = "라운드 1 / 3"
+roundLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+roundLabel.TextSize = 16
+roundLabel.Font = Enum.Font.GothamBold
+roundLabel.ZIndex = 26
+roundLabel.Parent = roundFrame
+
+local roundDots = Instance.new("TextLabel")
+roundDots.Name = "RoundDots"
+roundDots.Size = UDim2.new(1, 0, 0, 30)
+roundDots.Position = UDim2.new(0, 0, 0, 28)
+roundDots.BackgroundTransparency = 1
+roundDots.Text = "○ ○  VS  ○ ○"
+roundDots.TextColor3 = Color3.fromRGB(255, 255, 255)
+roundDots.TextSize = 22
+roundDots.Font = Enum.Font.GothamBlack
+roundDots.ZIndex = 26
+roundDots.Parent = roundFrame
+
+-----------------------------------------------
 -- 캐릭터 선택 화면 (싱글모드용)
 -----------------------------------------------
 local charSelect = Instance.new("Frame")
@@ -589,12 +630,12 @@ charLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 charLayout.Parent = charList
 
 local npcCharacters = {
-	{ name = "건달",     userId = 261,        desc = "동네 양아치", c1 = Color3.fromRGB(180, 40, 40), c2 = Color3.fromRGB(120, 20, 20) },
-	{ name = "학생",     userId = 156,        desc = "순진한 학생", c1 = Color3.fromRGB(40, 120, 200), c2 = Color3.fromRGB(25, 70, 140) },
-	{ name = "할아버지", userId = 2407518839, desc = "동네 어르신", c1 = Color3.fromRGB(140, 110, 60), c2 = Color3.fromRGB(90, 70, 30) },
-	{ name = "로봇",     userId = 4450258599, desc = "AI 로봇",    c1 = Color3.fromRGB(80, 80, 150), c2 = Color3.fromRGB(50, 50, 100) },
-	{ name = "닌자",     userId = 13656149,   desc = "그림자 닌자", c1 = Color3.fromRGB(50, 50, 60), c2 = Color3.fromRGB(20, 20, 25) },
-	{ name = "광대",     userId = 1,          desc = "서커스 광대", c1 = Color3.fromRGB(200, 100, 30), c2 = Color3.fromRGB(140, 60, 15) },
+	{ name = "건달",     userId = 261,        desc = "바위 좋아함", c1 = Color3.fromRGB(180, 40, 40), c2 = Color3.fromRGB(120, 20, 20) },
+	{ name = "학생",     userId = 156,        desc = "쉬움 ★☆☆", c1 = Color3.fromRGB(40, 120, 200), c2 = Color3.fromRGB(25, 70, 140) },
+	{ name = "할아버지", userId = 2407518839, desc = "보를 자주 냄", c1 = Color3.fromRGB(140, 110, 60), c2 = Color3.fromRGB(90, 70, 30) },
+	{ name = "로봇",     userId = 4450258599, desc = "보통 ★★☆", c1 = Color3.fromRGB(80, 80, 150), c2 = Color3.fromRGB(50, 50, 100) },
+	{ name = "닌자",     userId = 13656149,   desc = "어려움 ★★★", c1 = Color3.fromRGB(50, 50, 60), c2 = Color3.fromRGB(20, 20, 25) },
+	{ name = "광대",     userId = 1,          desc = "카오스 ???", c1 = Color3.fromRGB(200, 100, 30), c2 = Color3.fromRGB(140, 60, 15) },
 }
 
 for _, npcData in ipairs(npcCharacters) do
