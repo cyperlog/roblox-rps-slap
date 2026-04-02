@@ -36,6 +36,17 @@ colorCorrect.Saturation = 0.1
 colorCorrect.Parent = Lighting
 
 -----------------------------------------------
+-- 배경 음악 (BGM)
+-----------------------------------------------
+local bgm = Instance.new("Sound")
+bgm.Name = "BGM"
+bgm.SoundId = "rbxassetid://138746478130265"
+bgm.Volume = 0.4
+bgm.Looped = true
+bgm.Playing = true
+bgm.Parent = screenGui
+
+-----------------------------------------------
 -- UI 효과음
 -----------------------------------------------
 local UI_SOUNDS = {
