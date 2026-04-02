@@ -1964,8 +1964,8 @@ end
 
 -- 네온사인: 메인 타이틀
 local signPart = Instance.new("Part")
-signPart.Size = Vector3.new(14, 3, 0.3)
-signPart.Position = Vector3.new(0, 12, -18)
+signPart.Size = Vector3.new(20, 5, 0.3)
+signPart.Position = Vector3.new(0, 13, -18)
 signPart.Anchored = true
 signPart.CanCollide = false
 signPart.Material = Enum.Material.Neon
@@ -1979,7 +1979,7 @@ signGui.Parent = signPart
 local signText = Instance.new("TextLabel")
 signText.Size = UDim2.new(1, 0, 1, 0)
 signText.BackgroundTransparency = 1
-signText.Text = "뺨때리기 대회"
+signText.Text = "도전! 뺨때리기 마스터"
 signText.TextColor3 = Color3.fromRGB(255, 255, 50)
 signText.TextScaled = true
 signText.Font = Enum.Font.GothamBlack
