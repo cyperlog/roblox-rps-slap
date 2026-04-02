@@ -5,6 +5,73 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local DataStoreService = game:GetService("DataStoreService")
+
+-----------------------------------------------
+-- ★ DataStore (영구 저장)
+-----------------------------------------------
+local playerDataStore = DataStoreService:GetDataStore("PlayerData_v1")
+
+local DEFAULT_DATA = {
+	coins = 0,
+	wins = 0,
+	bestStreak = 0,
+	ownedSkins = { "기본" },
+	activeSkin = "기본",
+}
+
+local playerDataCache = {} -- userId → 저장할 데이터
+
+local function loadPlayerData(player)
+	local key = "player_" .. player.UserId
+	local success, data = pcall(function()
+		return playerDataStore:GetAsync(key)
+	end)
+
+	if success and data then
+		playerDataCache[player.UserId] = data
+	else
+		-- 신규 플레이어 또는 로드 실패 → 기본값
+		playerDataCache[player.UserId] = {
+			coins = DEFAULT_DATA.coins,
+			wins = DEFAULT_DATA.wins,
+			bestStreak = DEFAULT_DATA.bestStreak,
+			ownedSkins = { "기본" },
+			activeSkin = DEFAULT_DATA.activeSkin,
+		}
+	end
+
+	return playerDataCache[player.UserId]
+end
+
+local function savePlayerData(player)
+	local data = playerDataCache[player.UserId]
+	if not data then return end
+
+	-- leaderstats에서 최신 값 동기화
+	local ls = player:FindFirstChild("leaderstats")
+	if ls then
+		if ls:FindFirstChild("Coins") then data.coins = ls.Coins.Value end
+		if ls:FindFirstChild("Wins") then data.wins = ls.Wins.Value end
+		if ls:FindFirstChild("BestStreak") then data.bestStreak = ls.BestStreak.Value end
+	end
+
+	-- 스킨 데이터 동기화
+	local skinData = playerSkins[player.UserId]
+	if skinData then
+		data.ownedSkins = skinData.owned
+		data.activeSkin = skinData.active
+	end
+
+	local key = "player_" .. player.UserId
+	local success, err = pcall(function()
+		playerDataStore:SetAsync(key, data)
+	end)
+
+	if not success then
+		warn("[RPS] 데이터 저장 실패 (" .. player.Name .. "): " .. tostring(err))
+	end
+end
 
 -----------------------------------------------
 -- 효과음
@@ -76,27 +143,41 @@ local spectators = {}     -- player → matchId
 -- ★ 리더보드 (leaderstats)
 -----------------------------------------------
 Players.PlayerAdded:Connect(function(player)
+	-- DataStore에서 로드
+	local data = loadPlayerData(player)
+
 	local leaderstats = Instance.new("Folder")
 	leaderstats.Name = "leaderstats"
 	leaderstats.Parent = player
 
 	local wins = Instance.new("IntValue")
 	wins.Name = "Wins"
-	wins.Value = 0
+	wins.Value = data.wins or 0
 	wins.Parent = leaderstats
 
 	local bestStreak = Instance.new("IntValue")
 	bestStreak.Name = "BestStreak"
-	bestStreak.Value = 0
+	bestStreak.Value = data.bestStreak or 0
 	bestStreak.Parent = leaderstats
 
 	local coins = Instance.new("IntValue")
 	coins.Name = "Coins"
-	coins.Value = 0
+	coins.Value = data.coins or 0
 	coins.Parent = leaderstats
 
-	-- 기본 스킨 지급
-	playerSkins[player.UserId] = { owned = { "기본" }, active = "기본" }
+	-- 저장된 스킨 데이터 복원
+	local owned = data.ownedSkins or { "기본" }
+	-- 기본 스킨이 없으면 추가
+	local hasDefault = false
+	for _, s in ipairs(owned) do
+		if s == "기본" then hasDefault = true; break end
+	end
+	if not hasDefault then table.insert(owned, 1, "기본") end
+
+	playerSkins[player.UserId] = {
+		owned = owned,
+		active = data.activeSkin or "기본",
+	}
 end)
 
 local function addCoins(player, amount)
@@ -1273,10 +1354,15 @@ Players.PlayerRemoving:Connect(function(player)
 		end
 	end
 
+	-- ★ 퇴장 전 데이터 저장
+	savePlayerData(player)
+
 	lastDefeatedBy[player.UserId] = nil
 	pvpStreaks[player.UserId] = nil
 	soloMatchState[player.UserId] = nil
 	playerHistory[player.UserId] = nil
+	playerDataCache[player.UserId] = nil
+	playerSkins[player.UserId] = nil
 end)
 
 -----------------------------------------------
@@ -2067,4 +2153,30 @@ for angle = 0, 330, 30 do
 	floorLight.Parent = arenaFolder
 end
 
-print("[RPS] 가위바위보 서버 로드 완료! (풀 시스템)")
+-----------------------------------------------
+-- ★ 자동 저장 (120초마다)
+-----------------------------------------------
+task.spawn(function()
+	while true do
+		task.wait(120)
+		for _, p in ipairs(Players:GetPlayers()) do
+			task.spawn(function()
+				savePlayerData(p)
+			end)
+		end
+	end
+end)
+
+-----------------------------------------------
+-- ★ 서버 종료 시 전체 저장
+-----------------------------------------------
+game:BindToClose(function()
+	for _, p in ipairs(Players:GetPlayers()) do
+		task.spawn(function()
+			savePlayerData(p)
+		end)
+	end
+	task.wait(3) -- DataStore 요청 완료 대기
+end)
+
+print("[RPS] 가위바위보 서버 로드 완료! (풀 시스템 + DataStore)")
