@@ -46,13 +46,44 @@ bgm.Looped = true
 bgm.Playing = true
 bgm.Parent = screenGui
 
+local battleBgm = Instance.new("Sound")
+battleBgm.Name = "BattleBGM"
+battleBgm.SoundId = "rbxassetid://108322204177228"
+battleBgm.Volume = 0.5
+battleBgm.Looped = true
+battleBgm.Playing = false
+battleBgm.Parent = screenGui
+
+-----------------------------------------------
+-- BGM 전환
+-----------------------------------------------
+local function switchBGM(mode)
+	if mode == "battle" then
+		TweenService:Create(bgm, TweenInfo.new(0.5), { Volume = 0 }):Play()
+		task.delay(0.5, function()
+			bgm.Playing = false
+			battleBgm.Volume = 0
+			battleBgm.Playing = true
+			TweenService:Create(battleBgm, TweenInfo.new(0.5), { Volume = 0.5 }):Play()
+		end)
+	elseif mode == "lobby" then
+		TweenService:Create(battleBgm, TweenInfo.new(0.5), { Volume = 0 }):Play()
+		task.delay(0.5, function()
+			battleBgm.Playing = false
+			bgm.Volume = 0
+			bgm.Playing = true
+			TweenService:Create(bgm, TweenInfo.new(0.5), { Volume = 0.4 }):Play()
+		end)
+	end
+end
+
 -----------------------------------------------
 -- UI 효과음
 -----------------------------------------------
 local UI_SOUNDS = {
 	click     = "rbxassetid://6895079853",
-	win       = "rbxassetid://1837756993",
-	lose      = "rbxassetid://282954522",
+	win       = "rbxassetid://138911503838724",
+	lose      = "rbxassetid://136335820421357",
 	streak    = "rbxassetid://5766164683",
 	select    = "rbxassetid://6895079853",
 	countdown = "rbxassetid://5765933873",
@@ -650,6 +681,9 @@ end
 local function playCinematicIntro(opponentName)
 	local myName = player.DisplayName
 
+	-- 대전 BGM으로 전환
+	switchBGM("battle")
+
 	-- VS 화면
 	showVSScreen(myName, opponentName or "???")
 
@@ -819,6 +853,7 @@ rpsResult.OnClientEvent:Connect(function(data)
 		scoreLabel.Text = "연승: 0"
 		frame.Visible = false
 		resetCamera()
+		switchBGM("lobby")
 		modeSelect.Visible = true
 	end
 end)
@@ -891,6 +926,7 @@ pvpEndFrame:WaitForChild("MenuBtn").MouseButton1Click:Connect(function()
 	playUISound(UI_SOUNDS.click, 0.5, 0.8)
 	pvpEndFrame.Visible = false
 	resetCamera()
+	switchBGM("lobby")
 	currentOpponentId = nil
 	currentOpponentName = nil
 	gameMode = nil
@@ -1045,6 +1081,7 @@ rpsPvP.OnClientEvent:Connect(function(data)
 	elseif action == "opponent_left" then
 		hideAllUI()
 		resetCamera()
+		switchBGM("lobby")
 		modeSelect.Visible = true
 		currentOpponentId = nil
 		currentOpponentName = nil
