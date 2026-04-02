@@ -54,8 +54,8 @@ end
 -----------------------------------------------
 local modeSelect = Instance.new("Frame")
 modeSelect.Name = "ModeSelect"
-modeSelect.Size = UDim2.new(0, 500, 0, 360)
-modeSelect.Position = UDim2.new(0.5, -250, 0.5, -180)
+modeSelect.Size = UDim2.new(0, 500, 0, 420)
+modeSelect.Position = UDim2.new(0.5, -250, 0.5, -210)
 modeSelect.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
 modeSelect.BackgroundTransparency = 0.02
 modeSelect.BorderSizePixel = 0
@@ -189,6 +189,37 @@ pvpDesc.TextSize = 14
 pvpDesc.Font = Enum.Font.Gotham
 pvpDesc.ZIndex = 12
 pvpDesc.Parent = pvpBtn
+
+-- 상점 버튼
+local shopBtn = Instance.new("TextButton")
+shopBtn.Name = "ShopBtn"
+shopBtn.Size = UDim2.new(0, 135, 0, 50)
+shopBtn.Position = UDim2.new(0.5, -150, 0, 270)
+shopBtn.BackgroundColor3 = Color3.fromRGB(180, 140, 30)
+shopBtn.Text = "상점"
+shopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+shopBtn.TextSize = 20
+shopBtn.Font = Enum.Font.GothamBlack
+shopBtn.BorderSizePixel = 0
+shopBtn.ZIndex = 11
+shopBtn.Parent = modeSelect
+addCorner(shopBtn, 10)
+addGradient(shopBtn, Color3.fromRGB(200, 160, 30), Color3.fromRGB(150, 110, 10))
+
+-- 관전 버튼
+local spectateBtn = Instance.new("TextButton")
+spectateBtn.Name = "SpectateBtn"
+spectateBtn.Size = UDim2.new(0, 135, 0, 50)
+spectateBtn.Position = UDim2.new(0.5, 15, 0, 270)
+spectateBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+spectateBtn.Text = "관전"
+spectateBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+spectateBtn.TextSize = 20
+spectateBtn.Font = Enum.Font.GothamBold
+spectateBtn.BorderSizePixel = 0
+spectateBtn.ZIndex = 11
+spectateBtn.Parent = modeSelect
+addCorner(spectateBtn, 10)
 
 local onlineLabel = Instance.new("TextLabel")
 onlineLabel.Name = "OnlineCount"
@@ -915,3 +946,162 @@ winBannerText.TextSize = 36
 winBannerText.Font = Enum.Font.GothamBlack
 winBannerText.ZIndex = 76
 winBannerText.Parent = winBanner
+
+-----------------------------------------------
+-- ★ 코인 표시 (우측 상단)
+-----------------------------------------------
+local coinDisplay = Instance.new("TextLabel")
+coinDisplay.Name = "CoinDisplay"
+coinDisplay.Size = UDim2.new(0, 160, 0, 36)
+coinDisplay.Position = UDim2.new(1, -170, 0, 10)
+coinDisplay.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+coinDisplay.BackgroundTransparency = 0.2
+coinDisplay.Text = "0"
+coinDisplay.TextColor3 = Color3.fromRGB(255, 220, 50)
+coinDisplay.TextSize = 20
+coinDisplay.Font = Enum.Font.GothamBlack
+coinDisplay.ZIndex = 15
+coinDisplay.Parent = screenGui
+addCorner(coinDisplay, 10)
+
+-----------------------------------------------
+-- ★ 상점 프레임
+-----------------------------------------------
+local shopFrame = Instance.new("Frame")
+shopFrame.Name = "ShopFrame"
+shopFrame.Size = UDim2.new(0, 500, 0, 400)
+shopFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+shopFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+shopFrame.BackgroundTransparency = 0.02
+shopFrame.BorderSizePixel = 0
+shopFrame.Visible = false
+shopFrame.ZIndex = 30
+shopFrame.Parent = screenGui
+addCorner(shopFrame, 18)
+addStroke(shopFrame, Color3.fromRGB(255, 200, 50), 2)
+addShadow(shopFrame)
+
+local shopTitle = Instance.new("TextLabel")
+shopTitle.Size = UDim2.new(1, 0, 0, 45)
+shopTitle.Position = UDim2.new(0, 0, 0, 10)
+shopTitle.BackgroundTransparency = 1
+shopTitle.Text = "뺨 이펙트 상점"
+shopTitle.TextColor3 = Color3.fromRGB(255, 220, 50)
+shopTitle.TextSize = 26
+shopTitle.Font = Enum.Font.GothamBlack
+shopTitle.ZIndex = 31
+shopTitle.Parent = shopFrame
+
+local shopList = Instance.new("ScrollingFrame")
+shopList.Name = "ShopList"
+shopList.Size = UDim2.new(1, -30, 1, -110)
+shopList.Position = UDim2.new(0, 15, 0, 55)
+shopList.BackgroundTransparency = 1
+shopList.ScrollBarThickness = 4
+shopList.ZIndex = 31
+shopList.Parent = shopFrame
+
+local shopLayout = Instance.new("UIListLayout")
+shopLayout.Padding = UDim.new(0, 8)
+shopLayout.Parent = shopList
+
+local shopCloseBtn = Instance.new("TextButton")
+shopCloseBtn.Name = "CloseBtn"
+shopCloseBtn.Size = UDim2.new(0, 160, 0, 44)
+shopCloseBtn.Position = UDim2.new(0.5, -80, 1, -55)
+shopCloseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+shopCloseBtn.Text = "닫기"
+shopCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+shopCloseBtn.TextSize = 20
+shopCloseBtn.Font = Enum.Font.GothamBold
+shopCloseBtn.BorderSizePixel = 0
+shopCloseBtn.ZIndex = 31
+shopCloseBtn.Parent = shopFrame
+addCorner(shopCloseBtn, 10)
+
+-----------------------------------------------
+-- ★ 관전 프레임
+-----------------------------------------------
+local spectateFrame = Instance.new("Frame")
+spectateFrame.Name = "SpectateFrame"
+spectateFrame.Size = UDim2.new(0, 420, 0, 300)
+spectateFrame.Position = UDim2.new(0.5, -210, 0.5, -150)
+spectateFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+spectateFrame.BackgroundTransparency = 0.02
+spectateFrame.BorderSizePixel = 0
+spectateFrame.Visible = false
+spectateFrame.ZIndex = 30
+spectateFrame.Parent = screenGui
+addCorner(spectateFrame, 18)
+addStroke(spectateFrame, Color3.fromRGB(150, 150, 200), 2)
+addShadow(spectateFrame)
+
+local specTitle = Instance.new("TextLabel")
+specTitle.Size = UDim2.new(1, 0, 0, 40)
+specTitle.Position = UDim2.new(0, 0, 0, 10)
+specTitle.BackgroundTransparency = 1
+specTitle.Text = "진행 중인 대전"
+specTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+specTitle.TextSize = 24
+specTitle.Font = Enum.Font.GothamBlack
+specTitle.ZIndex = 31
+specTitle.Parent = spectateFrame
+
+local specList = Instance.new("ScrollingFrame")
+specList.Name = "SpecList"
+specList.Size = UDim2.new(1, -30, 1, -110)
+specList.Position = UDim2.new(0, 15, 0, 50)
+specList.BackgroundTransparency = 1
+specList.ScrollBarThickness = 4
+specList.ZIndex = 31
+specList.Parent = spectateFrame
+
+local specLayout = Instance.new("UIListLayout")
+specLayout.Padding = UDim.new(0, 8)
+specLayout.Parent = specList
+
+local specCloseBtn = Instance.new("TextButton")
+specCloseBtn.Name = "CloseBtn"
+specCloseBtn.Size = UDim2.new(0, 160, 0, 44)
+specCloseBtn.Position = UDim2.new(0.5, -80, 1, -55)
+specCloseBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+specCloseBtn.Text = "닫기"
+specCloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+specCloseBtn.TextSize = 20
+specCloseBtn.Font = Enum.Font.GothamBold
+specCloseBtn.BorderSizePixel = 0
+specCloseBtn.ZIndex = 31
+specCloseBtn.Parent = spectateFrame
+addCorner(specCloseBtn, 10)
+
+-- 관전 중 나가기 버튼 (관전 중 화면)
+local specExitBtn = Instance.new("TextButton")
+specExitBtn.Name = "SpectateExit"
+specExitBtn.Size = UDim2.new(0, 160, 0, 44)
+specExitBtn.Position = UDim2.new(0.5, -80, 1, -55)
+specExitBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+specExitBtn.Text = "관전 종료"
+specExitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+specExitBtn.TextSize = 20
+specExitBtn.Font = Enum.Font.GothamBold
+specExitBtn.BorderSizePixel = 0
+specExitBtn.Visible = false
+specExitBtn.ZIndex = 35
+specExitBtn.Parent = screenGui
+addCorner(specExitBtn, 10)
+
+-- 관전 정보 바
+local specInfoBar = Instance.new("TextLabel")
+specInfoBar.Name = "SpectateInfo"
+specInfoBar.Size = UDim2.new(0, 350, 0, 40)
+specInfoBar.Position = UDim2.new(0.5, -175, 0, 50)
+specInfoBar.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+specInfoBar.BackgroundTransparency = 0.2
+specInfoBar.Text = ""
+specInfoBar.TextColor3 = Color3.fromRGB(200, 200, 255)
+specInfoBar.TextSize = 18
+specInfoBar.Font = Enum.Font.GothamBold
+specInfoBar.Visible = false
+specInfoBar.ZIndex = 35
+specInfoBar.Parent = screenGui
+addCorner(specInfoBar, 10)

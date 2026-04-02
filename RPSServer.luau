@@ -54,6 +54,81 @@ local changeNPC = getOrCreate("ChangeNPC", "RemoteEvent")
 local resetNPC = getOrCreate("ResetNPC", "RemoteEvent")
 local rpsPvP = getOrCreate("RPSPvP", "RemoteEvent")
 local rpsAnnounce = getOrCreate("RPSAnnounce", "RemoteEvent")
+local rpsSkin = getOrCreate("RPSSkin", "RemoteEvent")
+local rpsSpectate = getOrCreate("RPSSpectate", "RemoteEvent")
+
+-----------------------------------------------
+-- ★ 스킨 데이터
+-----------------------------------------------
+local SKIN_DATA = {
+	{ id = "기본",   price = 0,   color1 = Color3.fromRGB(255, 80, 30),  color2 = Color3.fromRGB(200, 30, 10),  desc = "기본 이펙트" },
+	{ id = "불꽃",   price = 50,  color1 = Color3.fromRGB(255, 100, 0),  color2 = Color3.fromRGB(255, 200, 50), desc = "화염 이펙트" },
+	{ id = "번개",   price = 100, color1 = Color3.fromRGB(100, 180, 255), color2 = Color3.fromRGB(200, 230, 255), desc = "전기 이펙트" },
+	{ id = "독",     price = 75,  color1 = Color3.fromRGB(50, 255, 50),  color2 = Color3.fromRGB(0, 150, 0),    desc = "독 이펙트" },
+	{ id = "어둠",   price = 150, color1 = Color3.fromRGB(100, 0, 150),  color2 = Color3.fromRGB(30, 0, 50),    desc = "암흑 이펙트" },
+	{ id = "무지개", price = 200, color1 = Color3.fromRGB(255, 100, 100), color2 = Color3.fromRGB(100, 100, 255), desc = "무지개 이펙트" },
+}
+
+local playerSkins = {}   -- userId → { owned = {"기본"}, active = "기본" }
+local spectators = {}     -- player → matchId
+
+-----------------------------------------------
+-- ★ 리더보드 (leaderstats)
+-----------------------------------------------
+Players.PlayerAdded:Connect(function(player)
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
+
+	local wins = Instance.new("IntValue")
+	wins.Name = "Wins"
+	wins.Value = 0
+	wins.Parent = leaderstats
+
+	local bestStreak = Instance.new("IntValue")
+	bestStreak.Name = "BestStreak"
+	bestStreak.Value = 0
+	bestStreak.Parent = leaderstats
+
+	local coins = Instance.new("IntValue")
+	coins.Name = "Coins"
+	coins.Value = 0
+	coins.Parent = leaderstats
+
+	-- 기본 스킨 지급
+	playerSkins[player.UserId] = { owned = { "기본" }, active = "기본" }
+end)
+
+local function addCoins(player, amount)
+	local ls = player:FindFirstChild("leaderstats")
+	if ls and ls:FindFirstChild("Coins") then
+		ls.Coins.Value += amount
+	end
+end
+
+local function addWin(player)
+	local ls = player:FindFirstChild("leaderstats")
+	if not ls then return end
+	if ls:FindFirstChild("Wins") then ls.Wins.Value += 1 end
+end
+
+local function updateBestStreak(player, currentStreak)
+	local ls = player:FindFirstChild("leaderstats")
+	if not ls then return end
+	local best = ls:FindFirstChild("BestStreak")
+	if best and currentStreak > best.Value then
+		best.Value = currentStreak
+	end
+end
+
+local function getActiveSkin(player)
+	local data = playerSkins[player.UserId]
+	local activeId = data and data.active or "기본"
+	for _, skin in ipairs(SKIN_DATA) do
+		if skin.id == activeId then return skin end
+	end
+	return SKIN_DATA[1]
+end
 
 -----------------------------------------------
 -- 게임 상수
@@ -284,7 +359,7 @@ end
 -----------------------------------------------
 -- ★ 파티클/이펙트 (강화)
 -----------------------------------------------
-local function createSlapEffect(position)
+local function createSlapEffect(position, skinData)
 	-- 메인 파티클 (빨간/주황 폭발)
 	local part = Instance.new("Part")
 	part.Size = Vector3.new(1, 1, 1)
@@ -294,11 +369,14 @@ local function createSlapEffect(position)
 	part.Transparency = 1
 	part.Parent = workspace
 
+	local c1 = skinData and skinData.color1 or Color3.fromRGB(255, 80, 30)
+	local c2 = skinData and skinData.color2 or Color3.fromRGB(200, 30, 10)
+
 	local particle = Instance.new("ParticleEmitter")
 	particle.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 100)),
-		ColorSequenceKeypoint.new(0.3, Color3.fromRGB(255, 80, 30)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 30, 10)),
+		ColorSequenceKeypoint.new(0.3, c1),
+		ColorSequenceKeypoint.new(1, c2),
 	})
 	particle.Size = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 2),
@@ -326,7 +404,7 @@ local function createSlapEffect(position)
 	ring.Anchored = true
 	ring.CanCollide = false
 	ring.Material = Enum.Material.Neon
-	ring.Color = Color3.fromRGB(255, 200, 50)
+	ring.Color = c1
 	ring.Transparency = 0.3
 	ring.Parent = workspace
 
@@ -607,15 +685,19 @@ end
 -----------------------------------------------
 -- ★ 코믹 뺨 때리기 (전면 개편!)
 -----------------------------------------------
-local function comicSlap(attackerChar, victimChar)
+local function comicSlap(attackerChar, victimChar, attackerPlayer)
 	if not victimChar then return end
+
+	-- 공격자 스킨 적용
+	local skinData = nil
+	if attackerPlayer then
+		skinData = getActiveSkin(attackerPlayer)
+	end
 
 	local head = victimChar:FindFirstChild("Head")
 	if head then
-		-- 타격 사운드
 		playSound(SOUNDS.slap, head.Position, 2, 0.8)
-		-- 타격 이펙트
-		createSlapEffect(head.Position)
+		createSlapEffect(head.Position, skinData)
 	end
 
 	-- 공격자 팔 애니메이션
@@ -717,7 +799,7 @@ local function slapNPC(player)
 	local playerChar = player.Character
 
 	-- ★ 개선: 공격자(플레이어)가 NPC를 때림
-	comicSlap(playerChar, npc)
+	comicSlap(playerChar, npc, player)
 
 	local playerStreak = soloStreak[player.UserId] or 0
 	local texts = { "꼴좋다~", "아프지?ㅋ", "약하네~", "ㅋㅋㅋ" }
@@ -738,7 +820,7 @@ local function slapPlayerSolo(player)
 	local npc = workspace:FindFirstChild("NPC")
 
 	-- ★ 개선: NPC가 플레이어를 때림
-	comicSlap(npc, character)
+	comicSlap(npc, character, nil)
 
 	local texts = { "에잇 아프다!", "으악!", "한판 더!", "분하다..." }
 	showHumiliationBubble(character, texts[math.random(#texts)], 3)
@@ -880,7 +962,7 @@ local function resolvePvPMatch(matchId)
 
 	-- 라운드 뺨때리기 연출
 	if winner.Character and loser.Character then
-		comicSlap(winner.Character, loser.Character)
+		comicSlap(winner.Character, loser.Character, winner)
 	end
 
 	if not matchOver then
@@ -913,6 +995,10 @@ local function resolvePvPMatch(matchId)
 		addLoss(loser.UserId, winner.UserId)
 
 		local winStreak = pvpStreaks[winner.UserId]
+		addWin(winner)
+		addCoins(winner, 30 + math.min(winStreak, 10) * 5)
+		updateBestStreak(winner, winStreak)
+		addCoins(loser, 3)
 		local sameOpLosses = getLosses(loser.UserId, winner.UserId)
 		local revengeSuccess = match.isRevenge and (lastDefeatedBy[winner.UserId] == loser)
 		lastDefeatedBy[loser.UserId] = winner
@@ -1145,8 +1231,13 @@ rpsChoice.OnServerEvent:Connect(function(player, playerChoice)
 
 		if finalOutcome == "win" then
 			soloStreak[player.UserId] = (soloStreak[player.UserId] or 0) + 1
+			local streak = soloStreak[player.UserId]
+			addWin(player)
+			addCoins(player, 20 + math.min(streak, 10) * 5) -- 매치 승리 20 + 연승 보너스
+			updateBestStreak(player, streak)
 		else
 			soloStreak[player.UserId] = 0
+			addCoins(player, 2) -- 패배 위로금
 		end
 
 		rpsResult:FireClient(player, {
@@ -1721,4 +1812,259 @@ resolvePvPMatch = function(matchId)
 	end
 end
 
-print("[RPS] 가위바위보 서버 로드 완료! (싱글 + PvP + 시네마틱 + 경기장)")
+-----------------------------------------------
+-- ★ 스킨 구매/장착
+-----------------------------------------------
+rpsSkin.OnServerEvent:Connect(function(player, data)
+	if typeof(data) ~= "table" then return end
+	local action = data.action
+
+	if action == "buy" then
+		local skinId = data.skinId
+		local pData = playerSkins[player.UserId]
+		if not pData then return end
+
+		-- 이미 보유 확인
+		for _, owned in ipairs(pData.owned) do
+			if owned == skinId then
+				rpsSkin:FireClient(player, { action = "buy_fail", reason = "이미 보유 중!" })
+				return
+			end
+		end
+
+		-- 스킨 찾기
+		local skinInfo = nil
+		for _, s in ipairs(SKIN_DATA) do
+			if s.id == skinId then skinInfo = s; break end
+		end
+		if not skinInfo then return end
+
+		-- 코인 확인
+		local ls = player:FindFirstChild("leaderstats")
+		if not ls or not ls:FindFirstChild("Coins") then return end
+		if ls.Coins.Value < skinInfo.price then
+			rpsSkin:FireClient(player, { action = "buy_fail", reason = "코인이 부족합니다!" })
+			return
+		end
+
+		-- 구매!
+		ls.Coins.Value -= skinInfo.price
+		table.insert(pData.owned, skinId)
+		rpsSkin:FireClient(player, { action = "buy_ok", skinId = skinId })
+
+	elseif action == "equip" then
+		local skinId = data.skinId
+		local pData = playerSkins[player.UserId]
+		if not pData then return end
+
+		for _, owned in ipairs(pData.owned) do
+			if owned == skinId then
+				pData.active = skinId
+				rpsSkin:FireClient(player, { action = "equip_ok", skinId = skinId })
+				return
+			end
+		end
+
+	elseif action == "list" then
+		local pData = playerSkins[player.UserId]
+		if not pData then return end
+		rpsSkin:FireClient(player, { action = "skin_list", skins = SKIN_DATA, owned = pData.owned, active = pData.active })
+	end
+end)
+
+-----------------------------------------------
+-- ★ 관전 시스템
+-----------------------------------------------
+rpsSpectate.OnServerEvent:Connect(function(player, data)
+	if typeof(data) ~= "table" then return end
+	local action = data.action
+
+	if action == "list_matches" then
+		-- 진행 중인 PvP 매치 목록 전송
+		local matchList = {}
+		for mId, match in pairs(pvpMatches) do
+			if match.state == "choosing" then
+				table.insert(matchList, {
+					matchId = mId,
+					nameA = match.playerA.DisplayName,
+					nameB = match.playerB.DisplayName,
+					winsA = match.winsA or 0,
+					winsB = match.winsB or 0,
+					round = match.round or 1,
+				})
+			end
+		end
+		rpsSpectate:FireClient(player, { action = "match_list", matches = matchList })
+
+	elseif action == "watch" then
+		local matchId = data.matchId
+		local match = pvpMatches[matchId]
+		if not match then
+			rpsSpectate:FireClient(player, { action = "watch_fail", reason = "매치가 끝났습니다." })
+			return
+		end
+		spectators[player] = matchId
+		rpsSpectate:FireClient(player, {
+			action = "watch_start",
+			nameA = match.playerA.DisplayName,
+			nameB = match.playerB.DisplayName,
+			idA = match.playerA.UserId,
+			idB = match.playerB.UserId,
+			winsA = match.winsA or 0,
+			winsB = match.winsB or 0,
+		})
+
+	elseif action == "stop" then
+		spectators[player] = nil
+		rpsSpectate:FireClient(player, { action = "watch_stop" })
+	end
+end)
+
+-- 매치 결과를 관전자에게도 전파
+local function notifySpectators(matchId, eventData)
+	for spec, mId in pairs(spectators) do
+		if mId == matchId then
+			rpsSpectate:FireClient(spec, eventData)
+		end
+	end
+end
+
+-----------------------------------------------
+-- ★ 맵 환경 꾸미기
+-----------------------------------------------
+local Lighting = game:GetService("Lighting")
+
+-- 저녁 분위기 (드라마틱)
+Lighting.TimeOfDay = "20:30:00"
+Lighting.Ambient = Color3.fromRGB(50, 40, 60)
+Lighting.OutdoorAmbient = Color3.fromRGB(70, 60, 90)
+Lighting.Brightness = 1.5
+
+-- 분위기 효과
+local atmosphere = Instance.new("Atmosphere")
+atmosphere.Density = 0.25
+atmosphere.Offset = 0.4
+atmosphere.Color = Color3.fromRGB(200, 170, 160)
+atmosphere.Decay = Color3.fromRGB(120, 80, 130)
+atmosphere.Haze = 1.5
+atmosphere.Glare = 0.3
+atmosphere.Parent = Lighting
+
+-- 별이 보이는 하늘
+local sky = Instance.new("Sky")
+sky.StarCount = 3000
+sky.Parent = Lighting
+
+-- 기존 Baseplate 꾸미기
+local baseplate = workspace:FindFirstChild("Baseplate")
+if baseplate then
+	baseplate.Material = Enum.Material.Slate
+	baseplate.Color = Color3.fromRGB(30, 30, 35)
+end
+
+-- 네온사인: 메인 타이틀
+local signPart = Instance.new("Part")
+signPart.Size = Vector3.new(14, 3, 0.3)
+signPart.Position = Vector3.new(0, 12, -18)
+signPart.Anchored = true
+signPart.CanCollide = false
+signPart.Material = Enum.Material.Neon
+signPart.Color = Color3.fromRGB(255, 50, 30)
+signPart.Parent = arenaFolder
+
+local signGui = Instance.new("SurfaceGui")
+signGui.Face = Enum.NormalId.Front
+signGui.Parent = signPart
+
+local signText = Instance.new("TextLabel")
+signText.Size = UDim2.new(1, 0, 1, 0)
+signText.BackgroundTransparency = 1
+signText.Text = "뺨때리기 대회"
+signText.TextColor3 = Color3.fromRGB(255, 255, 50)
+signText.TextScaled = true
+signText.Font = Enum.Font.GothamBlack
+signText.Parent = signGui
+
+-- 뒷면도
+local signGui2 = Instance.new("SurfaceGui")
+signGui2.Face = Enum.NormalId.Back
+signGui2.Parent = signPart
+
+local signText2 = signText:Clone()
+signText2.Parent = signGui2
+
+-- 부제목 사인
+local subSign = Instance.new("Part")
+subSign.Size = Vector3.new(10, 1.5, 0.3)
+subSign.Position = Vector3.new(0, 9.5, -18)
+subSign.Anchored = true
+subSign.CanCollide = false
+subSign.Material = Enum.Material.Neon
+subSign.Color = Color3.fromRGB(50, 100, 255)
+subSign.Parent = arenaFolder
+
+local subGui = Instance.new("SurfaceGui")
+subGui.Face = Enum.NormalId.Front
+subGui.Parent = subSign
+
+local subText = Instance.new("TextLabel")
+subText.Size = UDim2.new(1, 0, 1, 0)
+subText.BackgroundTransparency = 1
+subText.Text = "3판 2선승 | 가위바위보"
+subText.TextColor3 = Color3.fromRGB(200, 220, 255)
+subText.TextScaled = true
+subText.Font = Enum.Font.GothamBold
+subText.Parent = subGui
+
+local subGui2 = Instance.new("SurfaceGui")
+subGui2.Face = Enum.NormalId.Back
+subGui2.Parent = subSign
+local subText2 = subText:Clone()
+subText2.Parent = subGui2
+
+-- 양쪽 배너 기둥
+for _, zDir in ipairs({1, -1}) do
+	for _, xDir in ipairs({1, -1}) do
+		local pole = Instance.new("Part")
+		pole.Size = Vector3.new(0.4, 10, 0.4)
+		pole.Position = Vector3.new(xDir * 16, 5, zDir * 16)
+		pole.Anchored = true
+		pole.Material = Enum.Material.Metal
+		pole.Color = Color3.fromRGB(80, 80, 90)
+		pole.Parent = arenaFolder
+
+		local flagPart = Instance.new("Part")
+		flagPart.Size = Vector3.new(3, 4, 0.1)
+		flagPart.Position = Vector3.new(xDir * 16, 8.5, zDir * 16)
+		flagPart.Anchored = true
+		flagPart.CanCollide = false
+		flagPart.Material = Enum.Material.Neon
+		flagPart.Color = (xDir * zDir > 0) and Color3.fromRGB(255, 50, 30) or Color3.fromRGB(50, 80, 255)
+		flagPart.Parent = arenaFolder
+
+		local flagLight = Instance.new("PointLight")
+		flagLight.Brightness = 0.8
+		flagLight.Range = 8
+		flagLight.Color = flagPart.Color
+		flagLight.Parent = flagPart
+	end
+end
+
+-- 바닥 조명 링 (링 주변)
+for angle = 0, 330, 30 do
+	local rad = math.rad(angle)
+	local x = math.cos(rad) * 20
+	local z = math.sin(rad) * 20
+	local floorLight = Instance.new("Part")
+	floorLight.Shape = Enum.PartType.Cylinder
+	floorLight.Size = Vector3.new(0.1, 1.5, 1.5)
+	floorLight.CFrame = CFrame.new(x, 0.05, z) * CFrame.Angles(0, 0, math.rad(90))
+	floorLight.Anchored = true
+	floorLight.CanCollide = false
+	floorLight.Material = Enum.Material.Neon
+	floorLight.Color = Color3.fromRGB(255, 200, 50)
+	floorLight.Transparency = 0.3
+	floorLight.Parent = arenaFolder
+end
+
+print("[RPS] 가위바위보 서버 로드 완료! (풀 시스템)")

@@ -164,6 +164,15 @@ local winBanner = screenGui:WaitForChild("WinBanner")
 local roundFrame = screenGui:WaitForChild("RoundScore")
 local roundLabel = roundFrame:WaitForChild("RoundLabel")
 local roundDots = roundFrame:WaitForChild("RoundDots")
+local coinDisplay = screenGui:WaitForChild("CoinDisplay")
+local shopFrame = screenGui:WaitForChild("ShopFrame")
+local spectateFrame = screenGui:WaitForChild("SpectateFrame")
+local specExitBtn = screenGui:WaitForChild("SpectateExit")
+local specInfoBar = screenGui:WaitForChild("SpectateInfo")
+
+-- 신규 RemoteEvent
+local rpsSkin = ReplicatedStorage:WaitForChild("RPSSkin")
+local rpsSpectate = ReplicatedStorage:WaitForChild("RPSSpectate")
 
 -----------------------------------------------
 -- 상태 변수
@@ -172,6 +181,7 @@ local gameMode = nil
 local canChoose = false
 local streak = 0
 local inGame = false
+local isSpectating = false
 local currentOpponentId = nil
 local currentOpponentName = nil
 local pendingChallengeFromId = nil
@@ -652,7 +662,33 @@ local function hideAllUI()
 	impactText.Visible = false
 	winBanner.Visible = false
 	roundFrame.Visible = false
+	shopFrame.Visible = false
+	spectateFrame.Visible = false
+	specExitBtn.Visible = false
+	specInfoBar.Visible = false
 end
+
+-----------------------------------------------
+-- ★ 코인 표시 업데이트
+-----------------------------------------------
+local function updateCoinDisplay()
+	local ls = player:FindFirstChild("leaderstats")
+	if ls and ls:FindFirstChild("Coins") then
+		coinDisplay.Text = "💰 " .. ls.Coins.Value
+	end
+end
+
+-- leaderstats 변경 감지
+task.spawn(function()
+	local ls = player:WaitForChild("leaderstats", 10)
+	if ls then
+		local coins = ls:WaitForChild("Coins", 5)
+		if coins then
+			coins.Changed:Connect(updateCoinDisplay)
+			updateCoinDisplay()
+		end
+	end
+end)
 
 -----------------------------------------------
 -- ★ 라운드 스코어 표시
@@ -1223,6 +1259,243 @@ rpsPvP.OnClientEvent:Connect(function(data)
 
 	elseif action == "queue_left" then
 		-- UI는 이미 처리됨
+	end
+end)
+
+-----------------------------------------------
+-- ★ 상점 시스템
+-----------------------------------------------
+modeSelect:WaitForChild("ShopBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.6, 1)
+	modeSelect.Visible = false
+	shopFrame.Visible = true
+	rpsSkin:FireServer({ action = "list" })
+end)
+
+shopFrame:WaitForChild("CloseBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.5, 0.8)
+	shopFrame.Visible = false
+	modeSelect.Visible = true
+end)
+
+rpsSkin.OnClientEvent:Connect(function(data)
+	if typeof(data) ~= "table" then return end
+
+	if data.action == "skin_list" then
+		-- 상점 목록 생성
+		local list = shopFrame:WaitForChild("ShopList")
+		for _, child in ipairs(list:GetChildren()) do
+			if child:IsA("Frame") then child:Destroy() end
+		end
+
+		for _, skin in ipairs(data.skins) do
+			local isOwned = false
+			for _, o in ipairs(data.owned) do
+				if o == skin.id then isOwned = true; break end
+			end
+			local isActive = data.active == skin.id
+
+			local item = Instance.new("Frame")
+			item.Size = UDim2.new(1, 0, 0, 55)
+			item.BackgroundColor3 = isActive and Color3.fromRGB(40, 40, 60) or Color3.fromRGB(25, 25, 35)
+			item.BorderSizePixel = 0
+			item.ZIndex = 32
+			item.Parent = list
+
+			local ic = Instance.new("UICorner")
+			ic.CornerRadius = UDim.new(0, 8)
+			ic.Parent = item
+
+			-- 색상 미리보기
+			local preview = Instance.new("Frame")
+			preview.Size = UDim2.new(0, 36, 0, 36)
+			preview.Position = UDim2.new(0, 10, 0.5, -18)
+			preview.BackgroundColor3 = skin.color1
+			preview.ZIndex = 33
+			preview.Parent = item
+			local pc = Instance.new("UICorner")
+			pc.CornerRadius = UDim.new(0, 18)
+			pc.Parent = preview
+
+			local nameLabel = Instance.new("TextLabel")
+			nameLabel.Size = UDim2.new(0, 120, 0, 22)
+			nameLabel.Position = UDim2.new(0, 55, 0, 6)
+			nameLabel.BackgroundTransparency = 1
+			nameLabel.Text = skin.id
+			nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+			nameLabel.TextSize = 18
+			nameLabel.Font = Enum.Font.GothamBold
+			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+			nameLabel.ZIndex = 33
+			nameLabel.Parent = item
+
+			local descLabel = Instance.new("TextLabel")
+			descLabel.Size = UDim2.new(0, 150, 0, 16)
+			descLabel.Position = UDim2.new(0, 55, 0, 30)
+			descLabel.BackgroundTransparency = 1
+			descLabel.Text = skin.desc
+			descLabel.TextColor3 = Color3.fromRGB(160, 160, 180)
+			descLabel.TextSize = 13
+			descLabel.Font = Enum.Font.Gotham
+			descLabel.TextXAlignment = Enum.TextXAlignment.Left
+			descLabel.ZIndex = 33
+			descLabel.Parent = item
+
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(0, 100, 0, 34)
+			btn.Position = UDim2.new(1, -115, 0.5, -17)
+			btn.BorderSizePixel = 0
+			btn.TextSize = 15
+			btn.Font = Enum.Font.GothamBold
+			btn.ZIndex = 33
+			btn.Parent = item
+
+			local bc = Instance.new("UICorner")
+			bc.CornerRadius = UDim.new(0, 8)
+			bc.Parent = btn
+
+			if isActive then
+				btn.BackgroundColor3 = Color3.fromRGB(80, 180, 80)
+				btn.Text = "장착 중"
+				btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			elseif isOwned then
+				btn.BackgroundColor3 = Color3.fromRGB(50, 120, 200)
+				btn.Text = "장착"
+				btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+				btn.MouseButton1Click:Connect(function()
+					rpsSkin:FireServer({ action = "equip", skinId = skin.id })
+				end)
+			else
+				btn.BackgroundColor3 = Color3.fromRGB(200, 160, 30)
+				btn.Text = "💰 " .. skin.price
+				btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+				btn.MouseButton1Click:Connect(function()
+					rpsSkin:FireServer({ action = "buy", skinId = skin.id })
+				end)
+			end
+		end
+
+	elseif data.action == "buy_ok" or data.action == "equip_ok" then
+		playUISound(UI_SOUNDS.click, 0.8, 1.5)
+		rpsSkin:FireServer({ action = "list" }) -- 목록 새로고침
+
+	elseif data.action == "buy_fail" then
+		playUISound(UI_SOUNDS.lose, 0.5, 0.5)
+	end
+end)
+
+-----------------------------------------------
+-- ★ 관전 시스템
+-----------------------------------------------
+modeSelect:WaitForChild("SpectateBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.6, 1)
+	modeSelect.Visible = false
+	spectateFrame.Visible = true
+	rpsSpectate:FireServer({ action = "list_matches" })
+end)
+
+spectateFrame:WaitForChild("CloseBtn").MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.5, 0.8)
+	spectateFrame.Visible = false
+	modeSelect.Visible = true
+end)
+
+specExitBtn.MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.5, 0.8)
+	rpsSpectate:FireServer({ action = "stop" })
+	isSpectating = false
+	specExitBtn.Visible = false
+	specInfoBar.Visible = false
+	resetCamera()
+	modeSelect.Visible = true
+end)
+
+rpsSpectate.OnClientEvent:Connect(function(data)
+	if typeof(data) ~= "table" then return end
+
+	if data.action == "match_list" then
+		local list = spectateFrame:WaitForChild("SpecList")
+		for _, child in ipairs(list:GetChildren()) do
+			if child:IsA("TextButton") then child:Destroy() end
+		end
+
+		if #data.matches == 0 then
+			local noMatch = Instance.new("TextButton")
+			noMatch.Size = UDim2.new(1, 0, 0, 40)
+			noMatch.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+			noMatch.Text = "진행 중인 대전이 없습니다"
+			noMatch.TextColor3 = Color3.fromRGB(120, 120, 140)
+			noMatch.TextSize = 16
+			noMatch.Font = Enum.Font.Gotham
+			noMatch.BorderSizePixel = 0
+			noMatch.ZIndex = 32
+			noMatch.Parent = list
+			local nc = Instance.new("UICorner")
+			nc.CornerRadius = UDim.new(0, 8)
+			nc.Parent = noMatch
+		else
+			for _, match in ipairs(data.matches) do
+				local mBtn = Instance.new("TextButton")
+				mBtn.Size = UDim2.new(1, 0, 0, 50)
+				mBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+				mBtn.Text = match.nameA .. " vs " .. match.nameB .. "  (R" .. match.round .. " | " .. match.winsA .. "-" .. match.winsB .. ")"
+				mBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+				mBtn.TextSize = 17
+				mBtn.Font = Enum.Font.GothamBold
+				mBtn.BorderSizePixel = 0
+				mBtn.ZIndex = 32
+				mBtn.Parent = list
+				local mc = Instance.new("UICorner")
+				mc.CornerRadius = UDim.new(0, 8)
+				mc.Parent = mBtn
+
+				local matchId = match.matchId
+				mBtn.MouseButton1Click:Connect(function()
+					rpsSpectate:FireServer({ action = "watch", matchId = matchId })
+				end)
+			end
+		end
+
+	elseif data.action == "watch_start" then
+		spectateFrame.Visible = false
+		isSpectating = true
+		specExitBtn.Visible = true
+		specInfoBar.Visible = true
+		specInfoBar.Text = "관전 중: " .. data.nameA .. " vs " .. data.nameB
+
+		-- 관전 카메라 (두 플레이어 사이)
+		camera.CameraType = Enum.CameraType.Scriptable
+		task.spawn(function()
+			while isSpectating do
+				local rootA, rootB = nil, nil
+				for _, p in ipairs(Players:GetPlayers()) do
+					if p.UserId == data.idA and p.Character then
+						rootA = p.Character:FindFirstChild("HumanoidRootPart")
+					elseif p.UserId == data.idB and p.Character then
+						rootB = p.Character:FindFirstChild("HumanoidRootPart")
+					end
+				end
+				if rootA and rootB then
+					local mid = (rootA.Position + rootB.Position) / 2
+					local dir = (rootB.Position - rootA.Position).Unit
+					local side = dir:Cross(Vector3.new(0, 1, 0)).Unit
+					local camPos = mid + side * 10 + Vector3.new(0, 3, 0)
+					local targetCF = CFrame.lookAt(camPos, mid + Vector3.new(0, 1.5, 0))
+					camera.CFrame = camera.CFrame:Lerp(targetCF, 0.1)
+				end
+				task.wait()
+			end
+		end)
+
+	elseif data.action == "watch_stop" then
+		isSpectating = false
+		specExitBtn.Visible = false
+		specInfoBar.Visible = false
+		resetCamera()
+
+	elseif data.action == "watch_fail" then
+		spectateFrame.Visible = true
+		rpsSpectate:FireServer({ action = "list_matches" })
 	end
 end)
 
