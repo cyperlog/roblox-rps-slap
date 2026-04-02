@@ -1105,3 +1105,120 @@ specInfoBar.Visible = false
 specInfoBar.ZIndex = 35
 specInfoBar.Parent = screenGui
 addCorner(specInfoBar, 10)
+
+-----------------------------------------------
+-- ★ 튜토리얼 오버레이
+-----------------------------------------------
+local tutorialOverlay = Instance.new("Frame")
+tutorialOverlay.Name = "TutorialOverlay"
+tutorialOverlay.Size = UDim2.new(1, 0, 1, 0)
+tutorialOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+tutorialOverlay.BackgroundTransparency = 0.4
+tutorialOverlay.BorderSizePixel = 0
+tutorialOverlay.Visible = false
+tutorialOverlay.ZIndex = 90
+tutorialOverlay.Parent = screenGui
+
+local tutFrame = Instance.new("Frame")
+tutFrame.Name = "TutFrame"
+tutFrame.Size = UDim2.new(0, 520, 0, 340)
+tutFrame.Position = UDim2.new(0.5, -260, 0.5, -170)
+tutFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+tutFrame.BackgroundTransparency = 0.02
+tutFrame.BorderSizePixel = 0
+tutFrame.ZIndex = 91
+tutFrame.Parent = tutorialOverlay
+addCorner(tutFrame, 20)
+addStroke(tutFrame, Color3.fromRGB(255, 200, 50), 2)
+
+-- 상단 바
+local tutTopBar = Instance.new("Frame")
+tutTopBar.Size = UDim2.new(1, 0, 0, 4)
+tutTopBar.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+tutTopBar.BorderSizePixel = 0
+tutTopBar.ZIndex = 92
+tutTopBar.Parent = tutFrame
+addGradient(tutTopBar, Color3.fromRGB(255, 200, 50), Color3.fromRGB(255, 100, 30), 0)
+
+-- 제목
+local tutTitle = Instance.new("TextLabel")
+tutTitle.Name = "Title"
+tutTitle.Size = UDim2.new(1, 0, 0, 40)
+tutTitle.Position = UDim2.new(0, 0, 0, 15)
+tutTitle.BackgroundTransparency = 1
+tutTitle.Text = ""
+tutTitle.TextColor3 = Color3.fromRGB(255, 220, 50)
+tutTitle.TextSize = 26
+tutTitle.Font = Enum.Font.GothamBlack
+tutTitle.ZIndex = 92
+tutTitle.Parent = tutFrame
+
+-- 설명 텍스트
+local tutDesc = Instance.new("TextLabel")
+tutDesc.Name = "Desc"
+tutDesc.Size = UDim2.new(1, -40, 0, 140)
+tutDesc.Position = UDim2.new(0, 20, 0, 60)
+tutDesc.BackgroundTransparency = 1
+tutDesc.Text = ""
+tutDesc.TextColor3 = Color3.fromRGB(220, 220, 230)
+tutDesc.TextSize = 19
+tutDesc.Font = Enum.Font.GothamBold
+tutDesc.TextWrapped = true
+tutDesc.TextYAlignment = Enum.TextYAlignment.Top
+tutDesc.ZIndex = 92
+tutDesc.Parent = tutFrame
+
+-- 이모지/아이콘
+local tutEmoji = Instance.new("TextLabel")
+tutEmoji.Name = "Emoji"
+tutEmoji.Size = UDim2.new(1, 0, 0, 60)
+tutEmoji.Position = UDim2.new(0, 0, 0, 195)
+tutEmoji.BackgroundTransparency = 1
+tutEmoji.Text = ""
+tutEmoji.TextSize = 50
+tutEmoji.ZIndex = 92
+tutEmoji.Parent = tutFrame
+
+-- 페이지 표시
+local tutPage = Instance.new("TextLabel")
+tutPage.Name = "Page"
+tutPage.Size = UDim2.new(1, 0, 0, 20)
+tutPage.Position = UDim2.new(0, 0, 1, -60)
+tutPage.BackgroundTransparency = 1
+tutPage.Text = "1 / 5"
+tutPage.TextColor3 = Color3.fromRGB(120, 120, 140)
+tutPage.TextSize = 14
+tutPage.Font = Enum.Font.Gotham
+tutPage.ZIndex = 92
+tutPage.Parent = tutFrame
+
+-- 다음 버튼
+local tutNextBtn = Instance.new("TextButton")
+tutNextBtn.Name = "NextBtn"
+tutNextBtn.Size = UDim2.new(0, 160, 0, 46)
+tutNextBtn.Position = UDim2.new(0.5, -10, 1, -52)
+tutNextBtn.BackgroundColor3 = Color3.fromRGB(255, 180, 30)
+tutNextBtn.Text = "다음 >"
+tutNextBtn.TextColor3 = Color3.fromRGB(30, 20, 0)
+tutNextBtn.TextSize = 20
+tutNextBtn.Font = Enum.Font.GothamBlack
+tutNextBtn.BorderSizePixel = 0
+tutNextBtn.ZIndex = 92
+tutNextBtn.Parent = tutFrame
+addCorner(tutNextBtn, 10)
+addGradient(tutNextBtn, Color3.fromRGB(255, 200, 50), Color3.fromRGB(255, 150, 20))
+
+-- 건너뛰기 버튼
+local tutSkipBtn = Instance.new("TextButton")
+tutSkipBtn.Name = "SkipBtn"
+tutSkipBtn.Size = UDim2.new(0, 100, 0, 46)
+tutSkipBtn.Position = UDim2.new(0.5, -175, 1, -52)
+tutSkipBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+tutSkipBtn.Text = "건너뛰기"
+tutSkipBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
+tutSkipBtn.TextSize = 16
+tutSkipBtn.Font = Enum.Font.GothamBold
+tutSkipBtn.BorderSizePixel = 0
+tutSkipBtn.ZIndex = 92
+tutSkipBtn.Parent = tutFrame
+addCorner(tutSkipBtn, 10)

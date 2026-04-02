@@ -18,7 +18,10 @@ local DEFAULT_DATA = {
 	bestStreak = 0,
 	ownedSkins = { "기본" },
 	activeSkin = "기본",
+	tutorialDone = false,
 }
+
+local rpsTutorial = getOrCreate("RPSTutorial", "RemoteEvent")
 
 local playerDataCache = {} -- userId → 저장할 데이터
 
@@ -38,6 +41,7 @@ local function loadPlayerData(player)
 			bestStreak = DEFAULT_DATA.bestStreak,
 			ownedSkins = { "기본" },
 			activeSkin = DEFAULT_DATA.activeSkin,
+			tutorialDone = false,
 		}
 	end
 
@@ -178,6 +182,23 @@ Players.PlayerAdded:Connect(function(player)
 		owned = owned,
 		active = data.activeSkin or "기본",
 	}
+
+	-- 튜토리얼 상태 전송
+	task.delay(1, function()
+		if player.Parent then
+			rpsTutorial:FireClient(player, { needTutorial = not data.tutorialDone })
+		end
+	end)
+end)
+
+-- 튜토리얼 완료 수신
+rpsTutorial.OnServerEvent:Connect(function(player, data)
+	if typeof(data) == "table" and data.action == "done" then
+		local cache = playerDataCache[player.UserId]
+		if cache then
+			cache.tutorialDone = true
+		end
+	end
 end)
 
 local function addCoins(player, amount)

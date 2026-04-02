@@ -1608,6 +1608,104 @@ rpsSpectate.OnClientEvent:Connect(function(data)
 end)
 
 -----------------------------------------------
+-- ★ 튜토리얼 시스템
+-----------------------------------------------
+local rpsTutorial = ReplicatedStorage:WaitForChild("RPSTutorial")
+local tutorialOverlay = screenGui:WaitForChild("TutorialOverlay")
+local tutFrame = tutorialOverlay:WaitForChild("TutFrame")
+local tutTitle = tutFrame:WaitForChild("Title")
+local tutDesc = tutFrame:WaitForChild("Desc")
+local tutEmoji = tutFrame:WaitForChild("Emoji")
+local tutPage = tutFrame:WaitForChild("Page")
+local tutNextBtn = tutFrame:WaitForChild("NextBtn")
+local tutSkipBtn = tutFrame:WaitForChild("SkipBtn")
+
+local TUTORIAL_PAGES = {
+	{
+		title = "환영합니다!",
+		desc = "도전! 뺨때리기 마스터에 오신 걸 환영합니다!\n\n가위바위보로 대결해서\n상대의 뺨을 갈기는 게임입니다!",
+		emoji = "👋",
+	},
+	{
+		title = "게임 방법",
+		desc = "가위, 바위, 보 중 하나를 선택하세요.\n이기면 상대의 뺨을 때리고\n지면 내가 맞습니다!\n\n3판 2선승으로 먼저 2번 이기면 승리!",
+		emoji = "✌️ ✊ 🖐️",
+	},
+	{
+		title = "NPC 대전",
+		desc = "싱글플레이에서 다양한 NPC와 대결!\n각 NPC마다 난이도와 전략이 다릅니다.\n\n학생은 쉽고, 닌자는 어렵습니다!",
+		emoji = "🤖",
+	},
+	{
+		title = "PvP 대전",
+		desc = "다른 플레이어와 실시간 대결!\n이기면 복수 도전도 가능합니다.\n\n관전 모드로 다른 사람의 대전도 구경하세요!",
+		emoji = "⚔️",
+	},
+	{
+		title = "코인 & 상점",
+		desc = "승리하면 코인을 획득!\n연승할수록 보너스 코인이 늘어납니다.\n\n상점에서 멋진 뺨 이펙트를 구매하세요!",
+		emoji = "💰",
+	},
+}
+
+local tutorialPage = 1
+
+local function showTutorialPage(page)
+	local data = TUTORIAL_PAGES[page]
+	if not data then return end
+
+	tutTitle.Text = data.title
+	tutDesc.Text = data.desc
+	tutEmoji.Text = data.emoji
+	tutPage.Text = page .. " / " .. #TUTORIAL_PAGES
+
+	if page >= #TUTORIAL_PAGES then
+		tutNextBtn.Text = "시작하기!"
+	else
+		tutNextBtn.Text = "다음 >"
+	end
+
+	-- 텍스트 등장 애니메이션
+	tutTitle.TextTransparency = 1
+	tutDesc.TextTransparency = 1
+	tutEmoji.TextTransparency = 1
+	TweenService:Create(tutTitle, TweenInfo.new(0.3), { TextTransparency = 0 }):Play()
+	TweenService:Create(tutDesc, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.1), { TextTransparency = 0 }):Play()
+	TweenService:Create(tutEmoji, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.2), { TextTransparency = 0 }):Play()
+end
+
+local function closeTutorial()
+	tutorialOverlay.Visible = false
+	modeSelect.Visible = true
+	rpsTutorial:FireServer({ action = "done" })
+end
+
+tutNextBtn.MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.5, 1.2)
+	tutorialPage += 1
+	if tutorialPage > #TUTORIAL_PAGES then
+		closeTutorial()
+	else
+		showTutorialPage(tutorialPage)
+	end
+end)
+
+tutSkipBtn.MouseButton1Click:Connect(function()
+	playUISound(UI_SOUNDS.click, 0.4, 0.8)
+	closeTutorial()
+end)
+
+-- 서버에서 튜토리얼 필요 여부 수신
+rpsTutorial.OnClientEvent:Connect(function(data)
+	if typeof(data) == "table" and data.needTutorial then
+		modeSelect.Visible = false
+		tutorialOverlay.Visible = true
+		tutorialPage = 1
+		showTutorialPage(1)
+	end
+end)
+
+-----------------------------------------------
 -- 시작: 모드 선택 화면
 -----------------------------------------------
 hideAllUI()
