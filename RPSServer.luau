@@ -1,6 +1,6 @@
 -- RPSServer.luau
 -- ServerScriptService에 Script로 넣기
--- 서버: 가위바위보 싱글 + PvP + 굴욕 + 복수 시스템
+-- 서버: 가위바위보 싱글 + PvP + 굴욕 + 복수 + 시네마틱 애니메이션
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,7 +10,9 @@ local RunService = game:GetService("RunService")
 -- 효과음
 -----------------------------------------------
 local SOUNDS = {
-	slap = "rbxassetid://5765933873",
+	slap     = "rbxassetid://5765933873",
+	whoosh   = "rbxassetid://5766164683",
+	thud     = "rbxassetid://5765933873",
 }
 
 local function playSound(soundId, position, volume, pitch)
@@ -46,13 +48,10 @@ local function getOrCreate(name, className)
 	return obj
 end
 
--- 싱글모드
 local rpsChoice = getOrCreate("RPSChoice", "RemoteEvent")
 local rpsResult = getOrCreate("RPSResult", "RemoteEvent")
 local changeNPC = getOrCreate("ChangeNPC", "RemoteEvent")
 local resetNPC = getOrCreate("ResetNPC", "RemoteEvent")
-
--- PvP
 local rpsPvP = getOrCreate("RPSPvP", "RemoteEvent")
 local rpsAnnounce = getOrCreate("RPSAnnounce", "RemoteEvent")
 
@@ -85,15 +84,13 @@ local npcStyles = {
 -----------------------------------------------
 -- PvP 상태
 -----------------------------------------------
-local pvpQueue = {}            -- 대기열 {player, ...}
-local pvpMatches = {}          -- matchId → {playerA, playerB, choiceA, choiceB, state}
-local playerMatch = {}         -- player → matchId
+local pvpQueue = {}
+local pvpMatches = {}
+local playerMatch = {}
 local nextMatchId = 1
-
--- 라이벌/굴욕 추적
-local rivalry = {}             -- "idA_idB" → {losses_a=0, losses_b=0}
-local pvpStreaks = {}          -- playerId → 연승 수
-local lastDefeatedBy = {}      -- playerId → opponent Player (복수 대상)
+local rivalry = {}
+local pvpStreaks = {}
+local lastDefeatedBy = {}
 
 -----------------------------------------------
 -- 라이벌 시스템
@@ -161,7 +158,7 @@ local function resetNPCPositions(playerCharacter)
 end
 
 -----------------------------------------------
--- NPC 외형 변경 (싱글모드)
+-- NPC 외형 변경
 -----------------------------------------------
 local function changeNPCAppearance(npcName)
 	local npc = workspace:FindFirstChild("NPC")
@@ -205,9 +202,10 @@ local function changeNPCAppearance(npcName)
 end
 
 -----------------------------------------------
--- 파티클/이펙트
+-- ★ 파티클/이펙트 (강화)
 -----------------------------------------------
 local function createSlapEffect(position)
+	-- 메인 파티클 (빨간/주황 폭발)
 	local part = Instance.new("Part")
 	part.Size = Vector3.new(1, 1, 1)
 	part.Position = position
@@ -217,23 +215,62 @@ local function createSlapEffect(position)
 	part.Parent = workspace
 
 	local particle = Instance.new("ParticleEmitter")
-	particle.Color = ColorSequence.new(Color3.fromRGB(255, 80, 30))
+	particle.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 100)),
+		ColorSequenceKeypoint.new(0.3, Color3.fromRGB(255, 80, 30)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 30, 10)),
+	})
 	particle.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 3),
+		NumberSequenceKeypoint.new(0, 2),
+		NumberSequenceKeypoint.new(0.3, 4),
 		NumberSequenceKeypoint.new(1, 0),
 	})
+	particle.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.5, 0.2),
+		NumberSequenceKeypoint.new(1, 1),
+	})
 	particle.Lifetime = NumberRange.new(0.3, 0.8)
-	particle.Speed = NumberRange.new(15, 30)
+	particle.Speed = NumberRange.new(20, 40)
 	particle.SpreadAngle = Vector2.new(360, 360)
+	particle.LightEmission = 0.8
 	particle.Rate = 0
 	particle.Parent = part
-	particle:Emit(50)
+	particle:Emit(60)
 
-	task.delay(1.5, function() part:Destroy() end)
+	-- 충격파 링
+	local ring = Instance.new("Part")
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Size = Vector3.new(0.2, 1, 1)
+	ring.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.Material = Enum.Material.Neon
+	ring.Color = Color3.fromRGB(255, 200, 50)
+	ring.Transparency = 0.3
+	ring.Parent = workspace
+
+	-- 링 확대 애니메이션
+	local startTime = tick()
+	local ringDuration = 0.5
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		local t = (tick() - startTime) / ringDuration
+		if t >= 1 then
+			conn:Disconnect()
+			ring:Destroy()
+			return
+		end
+		local size = 1 + t * 12
+		ring.Size = Vector3.new(0.2, size, size)
+		ring.Transparency = 0.3 + t * 0.7
+	end)
+
+	task.delay(2, function() part:Destroy() end)
 end
 
 -----------------------------------------------
--- 별 빙빙 이펙트
+-- ★ 별 빙빙 이펙트 (강화)
 -----------------------------------------------
 local function createStarsEffect(head)
 	if not head then return end
@@ -249,12 +286,14 @@ local function createStarsEffect(head)
 
 	local stars = {}
 	local starColors = {
-		Color3.fromRGB(255, 255, 0),
+		Color3.fromRGB(255, 255, 50),
 		Color3.fromRGB(255, 150, 0),
-		Color3.fromRGB(255, 255, 100),
+		Color3.fromRGB(255, 255, 150),
+		Color3.fromRGB(255, 200, 50),
+		Color3.fromRGB(255, 100, 100),
 	}
 
-	for i = 1, 3 do
+	for i = 1, 5 do
 		local star = Instance.new("Part")
 		star.Name = "Star" .. i
 		star.Size = Vector3.new(0.8, 0.8, 0.2)
@@ -268,21 +307,21 @@ local function createStarsEffect(head)
 		local sparkle = Instance.new("ParticleEmitter")
 		sparkle.Color = ColorSequence.new(starColors[i])
 		sparkle.Size = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.3),
-			NumberSequenceKeypoint.new(0.5, 0.6),
+			NumberSequenceKeypoint.new(0, 0.2),
+			NumberSequenceKeypoint.new(0.5, 0.5),
 			NumberSequenceKeypoint.new(1, 0),
 		})
-		sparkle.Lifetime = NumberRange.new(0.2, 0.5)
+		sparkle.Lifetime = NumberRange.new(0.2, 0.4)
 		sparkle.Speed = NumberRange.new(1, 3)
-		sparkle.Rate = 15
+		sparkle.Rate = 20
 		sparkle.LightEmission = 1
 		sparkle.Parent = star
 
 		table.insert(stars, star)
 	end
 
-	local radius = 2.0
-	local spinSpeed = 8
+	local radius = 2.2
+	local spinSpeed = 10
 	local duration = 3.0
 	local startTime = tick()
 
@@ -313,30 +352,104 @@ local function createStarsEffect(head)
 		local bobY = math.sin(elapsed * 4) * 0.3
 
 		for i, star in ipairs(stars) do
-			local angle = elapsed * spinSpeed + (i - 1) * math.rad(120)
+			local angle = elapsed * spinSpeed + (i - 1) * math.rad(360 / #stars)
 			local x = math.cos(angle) * radius
 			local z = math.sin(angle) * radius
-			star.Position = centerPos + Vector3.new(x, bobY, z)
+			star.Position = centerPos + Vector3.new(x, bobY + math.sin(elapsed * 6 + i) * 0.2, z)
 			star.Transparency = 1 - fade
-			local pulse = 0.6 + 0.3 * math.sin(elapsed * 10 + i)
+			local pulse = 0.5 + 0.4 * math.sin(elapsed * 12 + i * 2)
 			star.Size = Vector3.new(pulse, pulse, 0.2)
 		end
 	end)
 end
 
 -----------------------------------------------
--- 목 세바퀴 회전
+-- ★ 뺨때리기 팔 애니메이션 (신규!)
 -----------------------------------------------
-local function spinHead(character)
+local function animateSlap(attacker)
+	if not attacker then return end
+
+	local rightShoulder = nil
+	local rightElbow = nil
+	for _, desc in ipairs(attacker:GetDescendants()) do
+		if desc:IsA("Motor6D") then
+			if desc.Name == "RightShoulder" then rightShoulder = desc end
+			if desc.Name == "RightElbow" then rightElbow = desc end
+		end
+	end
+	if not rightShoulder then return end
+
+	local origC0 = rightShoulder.C0
+	local origElbow = rightElbow and rightElbow.C0
+
+	-- 키프레임 기반 애니메이션
+	-- {시간, 어깨 오프셋, 팔꿈치 오프셋}
+	local keyframes = {
+		{ 0.00, CFrame.new(), CFrame.new() },
+		-- 와인드업: 팔을 뒤로
+		{ 0.12, CFrame.Angles(math.rad(-15), math.rad(-70), math.rad(60)), CFrame.Angles(math.rad(-50), 0, 0) },
+		-- 스윙: 빠르게 앞으로!
+		{ 0.20, CFrame.Angles(math.rad(10), math.rad(100), math.rad(-30)), CFrame.Angles(math.rad(-20), 0, 0) },
+		-- 팔로스루
+		{ 0.28, CFrame.Angles(math.rad(5), math.rad(80), math.rad(-15)), CFrame.Angles(math.rad(-10), 0, 0) },
+		-- 복귀
+		{ 0.55, CFrame.new(), CFrame.new() },
+	}
+
+	-- 와인드업 사운드
+	local headPos = attacker:FindFirstChild("Head")
+	if headPos then
+		playSound(SOUNDS.whoosh, headPos.Position, 0.8, 1.5)
+	end
+
+	local startTime = tick()
+	local totalDuration = keyframes[#keyframes][1]
+
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		if not rightShoulder or not rightShoulder.Parent then
+			conn:Disconnect()
+			return
+		end
+
+		local elapsed = tick() - startTime
+		if elapsed >= totalDuration then
+			conn:Disconnect()
+			rightShoulder.C0 = origC0
+			if rightElbow and origElbow then rightElbow.C0 = origElbow end
+			return
+		end
+
+		-- 현재 키프레임 쌍 찾기
+		local prevKF, nextKF
+		for i = 1, #keyframes - 1 do
+			if elapsed >= keyframes[i][1] and elapsed < keyframes[i + 1][1] then
+				prevKF = keyframes[i]
+				nextKF = keyframes[i + 1]
+				break
+			end
+		end
+
+		if prevKF and nextKF then
+			local segDur = nextKF[1] - prevKF[1]
+			local t = (elapsed - prevKF[1]) / segDur
+			t = t * t * (3 - 2 * t) -- smoothstep
+
+			rightShoulder.C0 = origC0 * prevKF[2]:Lerp(nextKF[2], t)
+			if rightElbow and origElbow then
+				rightElbow.C0 = origElbow * prevKF[3]:Lerp(nextKF[3], t)
+			end
+		end
+	end)
+end
+
+-----------------------------------------------
+-- ★ 피격 리액션 (신규!)
+-----------------------------------------------
+local function victimReaction(character)
 	if not character then return end
 
-	local head = character:FindFirstChild("Head")
-	if not head then return end
-
-	-- 별 이펙트는 항상 표시
-	createStarsEffect(head)
-
-	-- Neck Motor6D 찾기 (없으면 별만 나옴)
+	-- 목 스냅 (머리가 옆으로 확 돌아감)
 	local neck = nil
 	for _, desc in ipairs(character:GetDescendants()) do
 		if desc:IsA("Motor6D") and desc.Name == "Neck" then
@@ -345,59 +458,107 @@ local function spinHead(character)
 		end
 	end
 
-	if not neck then return end
+	if neck then
+		local origC0 = neck.C0
+		local snapDuration = 0.06
+		local holdDuration = 0.2
+		local recoverDuration = 0.5
+		local totalDuration = snapDuration + holdDuration + recoverDuration
+		local startTime = tick()
 
-	local originalC0 = neck.C0
-	local spinDuration = 0.8
-	local totalSpins = 3
-	local startTime = tick()
+		local conn
+		conn = RunService.Heartbeat:Connect(function()
+			if not neck or not neck.Parent then
+				conn:Disconnect()
+				return
+			end
 
-	local conn
-	conn = RunService.Heartbeat:Connect(function()
-		if not neck or not neck.Parent then
-			conn:Disconnect()
-			return
-		end
+			local elapsed = tick() - startTime
+			if elapsed >= totalDuration then
+				conn:Disconnect()
+				neck.C0 = origC0
+				return
+			end
 
-		local elapsed = tick() - startTime
-		local t = elapsed / spinDuration
+			if elapsed < snapDuration then
+				local t = elapsed / snapDuration
+				neck.C0 = origC0 * CFrame.Angles(math.rad(10) * t, math.rad(-50) * t, math.rad(20) * t)
+			elseif elapsed < snapDuration + holdDuration then
+				-- 진동하며 홀드
+				local holdT = (elapsed - snapDuration) / holdDuration
+				local vibrate = math.sin(holdT * 30) * (1 - holdT) * 5
+				neck.C0 = origC0 * CFrame.Angles(math.rad(10), math.rad(-50) + math.rad(vibrate), math.rad(20))
+			else
+				local t = (elapsed - snapDuration - holdDuration) / recoverDuration
+				t = t * t * (3 - 2 * t) -- smoothstep
+				neck.C0 = origC0 * CFrame.Angles(math.rad(10) * (1 - t), math.rad(-50) * (1 - t), math.rad(20) * (1 - t))
+			end
+		end)
+	end
 
-		if t >= 1 then
-			conn:Disconnect()
-			neck.C0 = originalC0
-			return
-		end
+	-- 살짝 뒤로 밀림
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root then
+		local knockDir = root.CFrame.RightVector
+		local bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(4000, 2000, 4000)
+		bv.Velocity = knockDir * 6 + Vector3.new(0, 2, 0)
+		bv.Parent = root
+		task.delay(0.15, function()
+			if bv and bv.Parent then bv:Destroy() end
+		end)
+	end
 
-		local eased = 1 - (1 - t) * (1 - t)
-		local angle = eased * totalSpins * math.pi * 2
-		neck.C0 = originalC0 * CFrame.Angles(0, angle, math.sin(angle * 0.5) * math.rad(15))
+	-- 별 이펙트
+	local head = character:FindFirstChild("Head")
+	if head then
+		createStarsEffect(head)
+	end
+end
+
+-----------------------------------------------
+-- ★ 목 세바퀴 회전 (유지하되 victimReaction으로 교체)
+-----------------------------------------------
+local function spinHead(character)
+	-- 이제 victimReaction이 더 나은 연출을 해주므로 그쪽으로 위임
+	victimReaction(character)
+end
+
+-----------------------------------------------
+-- ★ 코믹 뺨 때리기 (전면 개편!)
+-----------------------------------------------
+local function comicSlap(attackerChar, victimChar)
+	if not victimChar then return end
+
+	local head = victimChar:FindFirstChild("Head")
+	if head then
+		-- 타격 사운드
+		playSound(SOUNDS.slap, head.Position, 2, 0.8)
+		-- 타격 이펙트
+		createSlapEffect(head.Position)
+	end
+
+	-- 공격자 팔 애니메이션
+	if attackerChar then
+		task.spawn(function()
+			animateSlap(attackerChar)
+		end)
+	end
+
+	-- 0.18초 뒤 (스윙이 도달하는 타이밍) 피격 리액션
+	task.delay(0.18, function()
+		victimReaction(victimChar)
 	end)
 end
 
 -----------------------------------------------
--- 코믹 뺨 때리기 (공통)
------------------------------------------------
-local function comicSlap(character)
-	if not character then return end
-
-	local head = character:FindFirstChild("Head")
-	if head then
-		createSlapEffect(head.Position)
-		playSound(SOUNDS.slap, head.Position, 2, 0.8)
-	end
-
-	spinHead(character)
-end
-
------------------------------------------------
--- 굴욕 말풍선 (패자 머리 위)
+-- 굴욕 말풍선
 -----------------------------------------------
 local function showHumiliationBubble(character, text, duration)
 	if not character then return end
 	local head = character:FindFirstChild("Head")
 	if not head then return end
 
-	-- 기존 말풍선 제거
 	local existing = head:FindFirstChild("HumiliationBubble")
 	if existing then existing:Destroy() end
 
@@ -453,30 +614,31 @@ local function getHumiliationData(winnerStreak, sameOpponentLosses, isRevenge)
 		bubbleText = texts[math.random(#texts)]
 	end
 
-	-- 연승별 추가 굴욕
 	local streakHumiliation = nil
 	if winnerStreak >= 10 then
-		streakHumiliation = "냄비뚜껑"   -- 클라이언트에서 처리
+		streakHumiliation = "냄비뚜껑"
 	elseif winnerStreak >= 5 then
-		streakHumiliation = "축소"       -- 캐릭터 크기 축소
+		streakHumiliation = "축소"
 	elseif winnerStreak >= 3 then
-		streakHumiliation = "호구칭호"   -- 머리위 칭호
+		streakHumiliation = "호구칭호"
 	end
 
 	return bubbleText, announceExtra, streakHumiliation
 end
 
 -----------------------------------------------
--- 싱글모드 뺨 때리기 (굴욕 포함)
+-- 싱글모드 뺨 때리기
 -----------------------------------------------
-local soloStreak = {}  -- playerId → 연승 수
+local soloStreak = {}
 
 local function slapNPC(player)
 	local npc = workspace:FindFirstChild("NPC")
 	if not npc then return end
-	comicSlap(npc)
+	local playerChar = player.Character
 
-	-- NPC에게 굴욕 말풍선
+	-- ★ 개선: 공격자(플레이어)가 NPC를 때림
+	comicSlap(playerChar, npc)
+
 	local playerStreak = soloStreak[player.UserId] or 0
 	local texts = { "꼴좋다~", "아프지?ㅋ", "약하네~", "ㅋㅋㅋ" }
 	local bubbleText = texts[math.random(#texts)]
@@ -493,9 +655,11 @@ end
 local function slapPlayerSolo(player)
 	local character = player.Character
 	if not character then return end
-	comicSlap(character)
+	local npc = workspace:FindFirstChild("NPC")
 
-	-- 플레이어에게 굴욕 말풍선
+	-- ★ 개선: NPC가 플레이어를 때림
+	comicSlap(npc, character)
+
 	local texts = { "에잇 아프다!", "으악!", "한판 더!", "분하다..." }
 	showHumiliationBubble(character, texts[math.random(#texts)], 3)
 end
@@ -538,18 +702,15 @@ local function startPvPMatch(playerA, playerB, isRevenge)
 	playerMatch[playerA] = matchId
 	playerMatch[playerB] = matchId
 
-	-- NPC 숨기기
 	local npc = workspace:FindFirstChild("NPC")
 	if npc then
 		local npcRoot = npc:FindFirstChild("HumanoidRootPart")
 		if npcRoot then npcRoot.CFrame = CFrame.new(0, -100, 0) end
 	end
 
-	-- 양쪽 플레이어 위치 배치
 	if playerA.Character then teleportCharacter(playerA.Character, CFRAME_A) end
 	if playerB.Character then teleportCharacter(playerB.Character, CFRAME_B) end
 
-	-- 양쪽에 매치 시작 알림
 	rpsPvP:FireClient(playerA, {
 		action = "matched",
 		opponentName = playerB.DisplayName,
@@ -569,14 +730,13 @@ local function startPvPMatch(playerA, playerB, isRevenge)
 end
 
 -----------------------------------------------
--- PvP 매치 큐 체크 (2명 모이면 매칭)
+-- PvP 매치 큐 체크
 -----------------------------------------------
 local function tryMatchFromQueue()
 	while #pvpQueue >= 2 do
 		local a = table.remove(pvpQueue, 1)
 		local b = table.remove(pvpQueue, 1)
 
-		-- 이미 매치 중이면 스킵
 		if playerMatch[a] or playerMatch[b] then
 			if not playerMatch[a] then table.insert(pvpQueue, 1, a) end
 			if not playerMatch[b] then table.insert(pvpQueue, 1, b) end
@@ -602,7 +762,7 @@ local function resolvePvPMatch(matchId)
 	local cA = match.choiceA
 	local cB = match.choiceB
 
-	local outcome -- A 기준
+	local outcome
 	if cA == cB then
 		outcome = "draw"
 	elseif winTable[cA] == cB then
@@ -614,7 +774,6 @@ local function resolvePvPMatch(matchId)
 	if outcome == "draw" then
 		rpsPvP:FireClient(pA, { action = "pvp_result", outcome = "draw", myChoice = cA, opChoice = cB })
 		rpsPvP:FireClient(pB, { action = "pvp_result", outcome = "draw", myChoice = cB, opChoice = cA })
-		-- 다시 choosing 상태로
 		match.choiceA = nil
 		match.choiceB = nil
 		match.state = "choosing"
@@ -630,43 +789,36 @@ local function resolvePvPMatch(matchId)
 		winChoice, loseChoice = cB, cA
 	end
 
-	-- 연승/라이벌 업데이트
 	pvpStreaks[winner.UserId] = (pvpStreaks[winner.UserId] or 0) + 1
 	pvpStreaks[loser.UserId] = 0
 	addLoss(loser.UserId, winner.UserId)
 
 	local winStreak = pvpStreaks[winner.UserId]
 	local sameOpLosses = getLosses(loser.UserId, winner.UserId)
-	local isRevenge = match.isRevenge and (winner == pA or winner == pB)
-	-- 복수 성공 = 복수 도전자가 이김
 	local revengeSuccess = match.isRevenge and (lastDefeatedBy[winner.UserId] == loser)
 
 	lastDefeatedBy[loser.UserId] = winner
 
-	-- 굴욕 데이터
 	local bubbleText, announceExtra, streakHumiliation = getHumiliationData(
 		winStreak, sameOpLosses, revengeSuccess
 	)
 
-	-- 패자에게 뺨 + 굴욕
-	if loser.Character then
-		comicSlap(loser.Character)
-		showHumiliationBubble(loser.Character, bubbleText, 4)
+	-- ★ 개선: 승자가 패자를 때림!
+	if winner.Character and loser.Character then
+		comicSlap(winner.Character, loser.Character)
 	end
+	showHumiliationBubble(loser.Character, bubbleText, 4)
 
-	-- 서버 공지
 	local announceMsg = "🔥 " .. winner.DisplayName .. "이(가) " .. loser.DisplayName .. "의 뺨을 갈겼습니다!" .. announceExtra
 	if winStreak >= 3 then
 		announceMsg = announceMsg .. " (" .. winStreak .. "연승!)"
 	end
 	announce(announceMsg)
 
-	-- 복수 실패 공지
 	if match.isRevenge and not revengeSuccess then
 		announce("😂 " .. loser.DisplayName .. " 복수도 실패ㅋㅋ")
 	end
 
-	-- 양쪽에 결과 전송
 	rpsPvP:FireClient(winner, {
 		action = "pvp_result",
 		outcome = "win",
@@ -693,7 +845,6 @@ local function resolvePvPMatch(matchId)
 		canRevenge = true,
 	})
 
-	-- 매치 정리
 	playerMatch[pA] = nil
 	playerMatch[pB] = nil
 	pvpMatches[matchId] = nil
@@ -732,11 +883,9 @@ rpsPvP.OnServerEvent:Connect(function(player, data)
 			match.choiceB = choice
 		end
 
-		-- 상대에게 "상대가 선택 완료" 알림
 		local opponent = (player == match.playerA) and match.playerB or match.playerA
 		rpsPvP:FireClient(opponent, { action = "opponent_chose" })
 
-		-- 둘 다 선택했으면 결과 처리
 		if match.choiceA and match.choiceB then
 			resolvePvPMatch(matchId)
 		end
@@ -763,7 +912,6 @@ rpsPvP.OnServerEvent:Connect(function(player, data)
 			return
 		end
 
-		-- 도전장 보내기
 		rpsPvP:FireClient(target, {
 			action = "challenge_received",
 			fromName = player.DisplayName,
@@ -786,12 +934,10 @@ rpsPvP.OnServerEvent:Connect(function(player, data)
 		if not challenger then return end
 
 		if accepted then
-			-- 양쪽 큐에서 빼기
 			removeFromQueue(player)
 			removeFromQueue(challenger)
 			startPvPMatch(challenger, player, true)
 		else
-			-- 도전 거절 → 굴욕 공지!
 			announce("🐔 " .. player.DisplayName .. "이(가) " .. challenger.DisplayName .. "의 도전에서 도망쳤습니다!")
 			rpsPvP:FireClient(challenger, {
 				action = "challenge_declined",
@@ -802,7 +948,7 @@ rpsPvP.OnServerEvent:Connect(function(player, data)
 end)
 
 -----------------------------------------------
--- 싱글모드 이벤트 (기존)
+-- 싱글모드 이벤트
 -----------------------------------------------
 changeNPC.OnServerEvent:Connect(function(player, npcName)
 	if npcStyles[npcName] then
@@ -864,4 +1010,537 @@ Players.PlayerRemoving:Connect(function(player)
 	pvpStreaks[player.UserId] = nil
 end)
 
-print("[RPS] 가위바위보 서버 로드 완료! (싱글 + PvP)")
+-----------------------------------------------
+-- ★ 경기장 링 건설
+-----------------------------------------------
+local arenaFolder = Instance.new("Folder")
+arenaFolder.Name = "Arena"
+arenaFolder.Parent = workspace
+
+-- 링 바닥 (메인 매트)
+local ringFloor = Instance.new("Part")
+ringFloor.Name = "RingFloor"
+ringFloor.Size = Vector3.new(18, 0.4, 18)
+ringFloor.Position = Vector3.new(0, 0.2, 0)
+ringFloor.Anchored = true
+ringFloor.Material = Enum.Material.SmoothPlastic
+ringFloor.Color = Color3.fromRGB(240, 235, 220)
+ringFloor.Parent = arenaFolder
+
+-- 빨간 코너 (플레이어 쪽)
+local redCorner = Instance.new("Part")
+redCorner.Size = Vector3.new(5, 0.05, 5)
+redCorner.Position = Vector3.new(0, 0.43, 4)
+redCorner.Anchored = true
+redCorner.CanCollide = false
+redCorner.Material = Enum.Material.Neon
+redCorner.Color = Color3.fromRGB(255, 40, 40)
+redCorner.Transparency = 0.5
+redCorner.Parent = arenaFolder
+
+-- 파란 코너 (상대 쪽)
+local blueCorner = Instance.new("Part")
+blueCorner.Size = Vector3.new(5, 0.05, 5)
+blueCorner.Position = Vector3.new(0, 0.43, -4)
+blueCorner.Anchored = true
+blueCorner.CanCollide = false
+blueCorner.Material = Enum.Material.Neon
+blueCorner.Color = Color3.fromRGB(40, 80, 255)
+blueCorner.Transparency = 0.5
+blueCorner.Parent = arenaFolder
+
+-- 중앙 원형 마크
+local centerRing = Instance.new("Part")
+centerRing.Shape = Enum.PartType.Cylinder
+centerRing.Size = Vector3.new(0.05, 8, 8)
+centerRing.CFrame = CFrame.new(0, 0.43, 0) * CFrame.Angles(0, 0, math.rad(90))
+centerRing.Anchored = true
+centerRing.CanCollide = false
+centerRing.Material = Enum.Material.Neon
+centerRing.Color = Color3.fromRGB(255, 200, 50)
+centerRing.Transparency = 0.6
+centerRing.Parent = arenaFolder
+
+-- 코너 포스트 4개
+local postCorners = {
+	Vector3.new(8, 0, 8),
+	Vector3.new(-8, 0, 8),
+	Vector3.new(8, 0, -8),
+	Vector3.new(-8, 0, -8),
+}
+
+for i, basePos in ipairs(postCorners) do
+	-- 기둥
+	local post = Instance.new("Part")
+	post.Name = "Post" .. i
+	post.Shape = Enum.PartType.Cylinder
+	post.Size = Vector3.new(6, 0.8, 0.8)
+	post.CFrame = CFrame.new(basePos + Vector3.new(0, 3.4, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	post.Anchored = true
+	post.Material = Enum.Material.Metal
+	post.Color = Color3.fromRGB(200, 200, 210)
+	post.Parent = arenaFolder
+
+	-- 골드 캡
+	local cap = Instance.new("Part")
+	cap.Shape = Enum.PartType.Ball
+	cap.Size = Vector3.new(1.3, 1.3, 1.3)
+	cap.Position = basePos + Vector3.new(0, 6.5, 0)
+	cap.Anchored = true
+	cap.Material = Enum.Material.Metal
+	cap.Color = Color3.fromRGB(255, 200, 50)
+	cap.Parent = arenaFolder
+
+	-- 포스트 조명
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 220, 180)
+	light.Brightness = 1
+	light.Range = 12
+	light.Parent = cap
+end
+
+-- 로프 3줄 연결
+local ropeHeights = { 2, 4, 5.8 }
+local ropeColors = {
+	Color3.fromRGB(255, 50, 30),
+	Color3.fromRGB(255, 255, 255),
+	Color3.fromRGB(255, 50, 30),
+}
+
+local ropePairs = {
+	{ postCorners[1], postCorners[2] },
+	{ postCorners[2], postCorners[4] },
+	{ postCorners[4], postCorners[3] },
+	{ postCorners[3], postCorners[1] },
+}
+
+for hi, height in ipairs(ropeHeights) do
+	for _, pair in ipairs(ropePairs) do
+		local p1 = pair[1] + Vector3.new(0, height, 0)
+		local p2 = pair[2] + Vector3.new(0, height, 0)
+		local mid = (p1 + p2) / 2
+		local length = (p2 - p1).Magnitude
+
+		local rope = Instance.new("Part")
+		rope.Size = Vector3.new(0.15, 0.15, length)
+		rope.CFrame = CFrame.lookAt(mid, p2)
+		rope.Anchored = true
+		rope.CanCollide = false
+		rope.Material = Enum.Material.SmoothPlastic
+		rope.Color = ropeColors[hi]
+		rope.Parent = arenaFolder
+	end
+end
+
+-- 상단 스포트라이트 2개
+for _, xDir in ipairs({-1, 1}) do
+	local spotPole = Instance.new("Part")
+	spotPole.Size = Vector3.new(0.5, 12, 0.5)
+	spotPole.Position = Vector3.new(xDir * 12, 6.4, 0)
+	spotPole.Anchored = true
+	spotPole.Material = Enum.Material.Metal
+	spotPole.Color = Color3.fromRGB(60, 60, 70)
+	spotPole.Parent = arenaFolder
+
+	local spotHead = Instance.new("Part")
+	spotHead.Size = Vector3.new(2, 1, 2)
+	spotHead.Position = Vector3.new(xDir * 12, 12.8, 0)
+	spotHead.Anchored = true
+	spotHead.Material = Enum.Material.Metal
+	spotHead.Color = Color3.fromRGB(40, 40, 50)
+	spotHead.Parent = arenaFolder
+
+	local spot = Instance.new("SpotLight")
+	spot.Brightness = 3
+	spot.Range = 40
+	spot.Angle = 50
+	spot.Face = Enum.NormalId.Bottom
+	spot.Color = Color3.fromRGB(255, 240, 220)
+	spot.Parent = spotHead
+end
+
+-----------------------------------------------
+-- ★ 관객석 (블리처) 건설
+-----------------------------------------------
+local standPositions = {}
+
+-- 양쪽 관객석 (X+ / X- 방향)
+for _, side in ipairs({1, -1}) do
+	for row = 1, 3 do
+		local x = side * (11 + (row - 1) * 3)
+		local y = 0.3 + (row - 1) * 1.8
+		local zStart = -7
+		local zEnd = 7
+
+		-- 좌석 벤치
+		local bench = Instance.new("Part")
+		bench.Name = "Bench"
+		bench.Size = Vector3.new(2.5, 0.4, zEnd - zStart + 2)
+		bench.Position = Vector3.new(x, y, 0)
+		bench.Anchored = true
+		bench.Material = Enum.Material.SmoothPlastic
+		bench.Color = row == 1 and Color3.fromRGB(80, 80, 90) or (row == 2 and Color3.fromRGB(70, 70, 80) or Color3.fromRGB(60, 60, 70))
+		bench.Parent = arenaFolder
+
+		-- 이 줄의 관중 위치 계산 (벤치 위에 서 있음)
+		local numSeats = 5
+		for s = 1, numSeats do
+			local z = zStart + (s - 1) * ((zEnd - zStart) / (numSeats - 1))
+			table.insert(standPositions, {
+				pos = Vector3.new(x, y + 3, z),
+				lookAt = Vector3.new(0, 3, 0),
+				side = side,
+				row = row,
+			})
+		end
+	end
+end
+
+-----------------------------------------------
+-- ★ 관중 NPC 생성
+-----------------------------------------------
+local spectatorData = {} -- {model, origWaist, origLeftShoulder, origRightShoulder}
+local cheerleaderData = {}
+
+local spectatorUserIds = {
+	1, 156, 261, 7, 8, 9, 10, 11, 12, 16, 18, 19, 20, 21, 22, 23,
+	24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 2407518839,
+	4450258599, 13656149,
+}
+
+local function createSpectatorNPC(position, lookAt, userId)
+	local ok, desc = pcall(function()
+		return Players:GetHumanoidDescriptionFromUserId(userId)
+	end)
+	if not ok or not desc then return nil end
+
+	local ok2, model = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok2 or not model then return nil end
+
+	model.Name = "Spectator"
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if root then
+		root.CFrame = CFrame.lookAt(position, lookAt)
+		root.Anchored = true
+	end
+
+	-- 관중 위 이름표 제거 (깔끔하게)
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
+
+	model.Parent = workspace:FindFirstChild("Arena") or workspace
+	return model
+end
+
+local function getMotorData(model)
+	local data = {}
+	for _, desc in ipairs(model:GetDescendants()) do
+		if desc:IsA("Motor6D") then
+			if desc.Name == "Waist" then
+				data.waist = desc
+				data.origWaist = desc.C0
+			elseif desc.Name == "LeftShoulder" then
+				data.leftShoulder = desc
+				data.origLeft = desc.C0
+			elseif desc.Name == "RightShoulder" then
+				data.rightShoulder = desc
+				data.origRight = desc.C0
+			elseif desc.Name == "Neck" then
+				data.neck = desc
+				data.origNeck = desc.C0
+			end
+		end
+	end
+	return data
+end
+
+-- 관중 스폰 (비동기, 순차적으로 생성해서 서버 부담 최소화)
+task.spawn(function()
+	task.wait(3) -- 서버 로드 후 약간 대기
+
+	-- 관중 생성
+	for i, standData in ipairs(standPositions) do
+		local userId = spectatorUserIds[((i - 1) % #spectatorUserIds) + 1]
+		local model = createSpectatorNPC(standData.pos, standData.lookAt, userId)
+		if model then
+			local motors = getMotorData(model)
+			motors.model = model
+			motors.index = i
+			table.insert(spectatorData, motors)
+		end
+		task.wait(0.15) -- 서버 부담 방지
+	end
+
+	-- 치어리더 4명 (링 바로 바깥 모서리)
+	local cheerPositions = {
+		{ pos = Vector3.new(9, 3, 9),   lookAt = Vector3.new(0, 3, 0) },
+		{ pos = Vector3.new(-9, 3, 9),  lookAt = Vector3.new(0, 3, 0) },
+		{ pos = Vector3.new(9, 3, -9),  lookAt = Vector3.new(0, 3, 0) },
+		{ pos = Vector3.new(-9, 3, -9), lookAt = Vector3.new(0, 3, 0) },
+	}
+
+	local cheerUserIds = { 1, 156, 261, 13656149 }
+
+	for i, cData in ipairs(cheerPositions) do
+		local model = createSpectatorNPC(cData.pos, cData.lookAt, cheerUserIds[i])
+		if model then
+			local motors = getMotorData(model)
+			motors.model = model
+			motors.index = i
+			table.insert(cheerleaderData, motors)
+		end
+		task.wait(0.2)
+	end
+
+	print("[RPS] 관중 " .. #spectatorData .. "명 + 치어리더 " .. #cheerleaderData .. "명 생성 완료!")
+end)
+
+-----------------------------------------------
+-- ★ 관중 아이들 애니메이션 (상시)
+-----------------------------------------------
+RunService.Heartbeat:Connect(function()
+	local t = tick()
+
+	-- 관중: 가벼운 몸 흔들기
+	for i, data in ipairs(spectatorData) do
+		if data.waist and data.waist.Parent and data.origWaist then
+			local phase = i * 0.8
+			local sway = math.sin(t * 1.2 + phase) * math.rad(3)
+			local nod = math.sin(t * 0.8 + phase * 1.3) * math.rad(2)
+			data.waist.C0 = data.origWaist * CFrame.Angles(nod, sway, 0)
+		end
+	end
+
+	-- 치어리더: 댄스 (팔 번갈아 올리기 + 허리 흔들기)
+	for i, data in ipairs(cheerleaderData) do
+		if data.model and data.model.Parent then
+			local phase = i * math.pi / 2
+			local speed = 3
+
+			if data.leftShoulder and data.origLeft then
+				local armL = math.sin(t * speed + phase) * math.rad(100) - math.rad(50)
+				data.leftShoulder.C0 = data.origLeft * CFrame.Angles(armL, 0, math.rad(-15))
+			end
+			if data.rightShoulder and data.origRight then
+				local armR = math.sin(t * speed + phase + math.pi) * math.rad(100) - math.rad(50)
+				data.rightShoulder.C0 = data.origRight * CFrame.Angles(armR, 0, math.rad(15))
+			end
+			if data.waist and data.origWaist then
+				local hipSway = math.sin(t * speed * 2 + phase) * math.rad(12)
+				local bounce = math.abs(math.sin(t * speed + phase)) * math.rad(5)
+				data.waist.C0 = data.origWaist * CFrame.Angles(-bounce, hipSway, 0)
+			end
+		end
+	end
+end)
+
+-----------------------------------------------
+-- ★ 관중 반응 시스템
+-----------------------------------------------
+local function crowdReact(reaction)
+	task.spawn(function()
+		for i, data in ipairs(spectatorData) do
+			if not data.model or not data.model.Parent then continue end
+
+			task.spawn(function()
+				-- 랜덤 딜레이 (파도타기 효과)
+				task.wait(math.random() * 0.4)
+
+				if reaction == "cheer" then
+					-- 양 팔 올리기 + 점프 흉내
+					local root = data.model:FindFirstChild("HumanoidRootPart")
+					local origPos = root and root.Position
+
+					-- 팔 올리기
+					if data.leftShoulder and data.origLeft then
+						local startTime = tick()
+						local dur = 1.5
+						local conn
+						conn = RunService.Heartbeat:Connect(function()
+							local elapsed = tick() - startTime
+							if elapsed >= dur then
+								conn:Disconnect()
+								if data.leftShoulder and data.leftShoulder.Parent then
+									data.leftShoulder.C0 = data.origLeft
+								end
+								if data.rightShoulder and data.rightShoulder.Parent then
+									data.rightShoulder.C0 = data.origRight
+								end
+								return
+							end
+
+							local t2 = elapsed / dur
+							local pump
+							if t2 < 0.1 then
+								pump = t2 / 0.1
+							elseif t2 < 0.75 then
+								pump = 1 + math.sin((t2 - 0.1) * 25) * 0.15
+							else
+								pump = 1 - (t2 - 0.75) / 0.25
+							end
+
+							local upAngle = math.rad(-160) * pump
+							if data.leftShoulder and data.leftShoulder.Parent then
+								data.leftShoulder.C0 = data.origLeft * CFrame.Angles(upAngle, 0, math.rad(-10))
+							end
+							if data.rightShoulder and data.rightShoulder.Parent then
+								data.rightShoulder.C0 = data.origRight * CFrame.Angles(upAngle, 0, math.rad(10))
+							end
+						end)
+					end
+
+					-- 점프 (위치 살짝 올렸다 내림)
+					if root and origPos then
+						local startTime = tick()
+						local jumpDur = 0.6
+						local conn2
+						conn2 = RunService.Heartbeat:Connect(function()
+							local elapsed = tick() - startTime
+							if elapsed >= jumpDur then
+								conn2:Disconnect()
+								root.CFrame = CFrame.lookAt(origPos, Vector3.new(0, 3, 0))
+								return
+							end
+							local t2 = elapsed / jumpDur
+							local jumpH = math.sin(t2 * math.pi) * 2
+							root.CFrame = CFrame.lookAt(origPos + Vector3.new(0, jumpH, 0), Vector3.new(0, 3, 0))
+						end)
+					end
+
+				elseif reaction == "gasp" then
+					-- 뒤로 젖히기 (놀람)
+					if data.waist and data.origWaist then
+						local startTime = tick()
+						local dur = 1.0
+						local conn
+						conn = RunService.Heartbeat:Connect(function()
+							local elapsed = tick() - startTime
+							if elapsed >= dur then
+								conn:Disconnect()
+								return
+							end
+							local t2 = elapsed / dur
+							local leanBack
+							if t2 < 0.1 then
+								leanBack = (t2 / 0.1) * math.rad(20)
+							elseif t2 < 0.4 then
+								leanBack = math.rad(20)
+							else
+								leanBack = math.rad(20) * (1 - (t2 - 0.4) / 0.6)
+							end
+							data.waist.C0 = data.origWaist * CFrame.Angles(-leanBack, 0, 0)
+						end)
+					end
+
+					-- 손 올리기 (한 손만)
+					local shoulder = math.random() > 0.5 and data.leftShoulder or data.rightShoulder
+					local origS = math.random() > 0.5 and data.origLeft or data.origRight
+					if shoulder and origS then
+						local startTime = tick()
+						local dur = 0.8
+						local conn
+						conn = RunService.Heartbeat:Connect(function()
+							local elapsed = tick() - startTime
+							if elapsed >= dur then
+								conn:Disconnect()
+								if shoulder.Parent then shoulder.C0 = origS end
+								return
+							end
+							local t2 = elapsed / dur
+							local raise = (t2 < 0.15) and (t2 / 0.15) or (1 - (t2 - 0.15) / 0.85)
+							shoulder.C0 = origS * CFrame.Angles(math.rad(-80) * raise, 0, 0)
+						end)
+					end
+
+				elseif reaction == "ohh" then
+					-- 무승부 / 긴장감: 몸 앞으로 숙이기
+					if data.waist and data.origWaist then
+						local startTime = tick()
+						local dur = 1.2
+						local conn
+						conn = RunService.Heartbeat:Connect(function()
+							local elapsed = tick() - startTime
+							if elapsed >= dur then
+								conn:Disconnect()
+								return
+							end
+							local t2 = elapsed / dur
+							local lean = (t2 < 0.2) and (t2 / 0.2 * math.rad(15)) or (math.rad(15) * (1 - (t2 - 0.2) / 1.0))
+							data.waist.C0 = data.origWaist * CFrame.Angles(lean, 0, 0)
+						end)
+					end
+				end
+			end)
+		end
+
+		-- 치어리더도 반응
+		if reaction == "cheer" then
+			-- 치어리더 속도 업!  (일시적으로 더 빠른 댄스)
+			-- 별도 구현 필요없이, 이미 상시 애니메이션이 돌고 있음
+		end
+	end)
+end
+
+-- 관중 사운드 (환호)
+local function playCrowdSound(soundType)
+	local soundIds = {
+		cheer = "rbxassetid://1837756993",
+		gasp  = "rbxassetid://282954522",
+	}
+
+	local sid = soundIds[soundType]
+	if not sid then return end
+
+	-- 여러 방향에서 동시에 재생 (입체감)
+	for _, xDir in ipairs({-10, 10}) do
+		playSound(sid, Vector3.new(xDir, 5, 0), 0.6, 0.8 + math.random() * 0.4)
+	end
+end
+
+-----------------------------------------------
+-- ★ comicSlap에 관중 반응 연결
+-----------------------------------------------
+local _originalComicSlap = comicSlap
+comicSlap = function(attackerChar, victimChar)
+	_originalComicSlap(attackerChar, victimChar)
+
+	-- 뺨 때릴 때 관중 "우와!" 반응
+	task.spawn(function()
+		task.wait(0.2)
+		crowdReact("gasp")
+		playCrowdSound("gasp")
+	end)
+end
+
+-- 승리 시 관중 환호 (결과 처리에서 호출용)
+local _originalSlapNPC = slapNPC
+slapNPC = function(player)
+	_originalSlapNPC(player)
+	task.spawn(function()
+		task.wait(0.8)
+		crowdReact("cheer")
+		playCrowdSound("cheer")
+	end)
+end
+
+-- PvP 결과에서도 환호 추가
+local _originalResolvePvP = resolvePvPMatch
+resolvePvPMatch = function(matchId)
+	local match = pvpMatches[matchId]
+	_originalResolvePvP(matchId)
+
+	-- 매치가 resolved 되었으면 (무승부 아닌 경우) 환호
+	if match and match.state == "resolved" then
+		task.spawn(function()
+			task.wait(1)
+			crowdReact("cheer")
+			playCrowdSound("cheer")
+		end)
+	end
+end
+
+print("[RPS] 가위바위보 서버 로드 완료! (싱글 + PvP + 시네마틱 + 경기장)")
