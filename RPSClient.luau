@@ -164,15 +164,15 @@ local winBanner = screenGui:WaitForChild("WinBanner")
 local roundFrame = screenGui:WaitForChild("RoundScore")
 local roundLabel = roundFrame:WaitForChild("RoundLabel")
 local roundDots = roundFrame:WaitForChild("RoundDots")
-local coinDisplay = screenGui:WaitForChild("CoinDisplay")
-local shopFrame = screenGui:WaitForChild("ShopFrame")
-local spectateFrame = screenGui:WaitForChild("SpectateFrame")
-local specExitBtn = screenGui:WaitForChild("SpectateExit")
-local specInfoBar = screenGui:WaitForChild("SpectateInfo")
+local coinDisplay = screenGui:WaitForChild("CoinDisplay", 10)
+local shopFrame = screenGui:WaitForChild("ShopFrame", 10)
+local spectateFrame = screenGui:WaitForChild("SpectateFrame", 10)
+local specExitBtn = screenGui:WaitForChild("SpectateExit", 10)
+local specInfoBar = screenGui:WaitForChild("SpectateInfo", 10)
 
 -- 신규 RemoteEvent
-local rpsSkin = ReplicatedStorage:WaitForChild("RPSSkin")
-local rpsSpectate = ReplicatedStorage:WaitForChild("RPSSpectate")
+local rpsSkin = ReplicatedStorage:WaitForChild("RPSSkin", 10)
+local rpsSpectate = ReplicatedStorage:WaitForChild("RPSSpectate", 10)
 
 -----------------------------------------------
 -- 상태 변수
@@ -662,10 +662,11 @@ local function hideAllUI()
 	impactText.Visible = false
 	winBanner.Visible = false
 	roundFrame.Visible = false
-	shopFrame.Visible = false
-	spectateFrame.Visible = false
-	specExitBtn.Visible = false
-	specInfoBar.Visible = false
+	if shopFrame then shopFrame.Visible = false end
+	if spectateFrame then spectateFrame.Visible = false end
+	if specExitBtn then specExitBtn.Visible = false end
+	if specInfoBar then specInfoBar.Visible = false end
+	if tutFrame then tutFrame.Visible = false end
 end
 
 -----------------------------------------------
@@ -1610,15 +1611,14 @@ end)
 -----------------------------------------------
 -- ★ 튜토리얼 시스템
 -----------------------------------------------
-local rpsTutorial = ReplicatedStorage:WaitForChild("RPSTutorial")
-local tutorialOverlay = screenGui:WaitForChild("TutorialOverlay")
-local tutFrame = tutorialOverlay:WaitForChild("TutFrame")
-local tutTitle = tutFrame:WaitForChild("Title")
-local tutDesc = tutFrame:WaitForChild("Desc")
-local tutEmoji = tutFrame:WaitForChild("Emoji")
-local tutPage = tutFrame:WaitForChild("Page")
-local tutNextBtn = tutFrame:WaitForChild("NextBtn")
-local tutSkipBtn = tutFrame:WaitForChild("SkipBtn")
+local rpsTutorial = ReplicatedStorage:WaitForChild("RPSTutorial", 10)
+local tutFrame = screenGui:WaitForChild("TutorialFrame", 10)
+local tutTitle = tutFrame and tutFrame:WaitForChild("Title", 5)
+local tutDesc = tutFrame and tutFrame:WaitForChild("Desc", 5)
+local tutEmoji = tutFrame and tutFrame:WaitForChild("Emoji", 5)
+local tutPage = tutFrame and tutFrame:WaitForChild("Page", 5)
+local tutNextBtn = tutFrame and tutFrame:WaitForChild("NextBtn", 5)
+local tutSkipBtn = tutFrame and tutFrame:WaitForChild("SkipBtn", 5)
 
 local TUTORIAL_PAGES = {
 	{
@@ -1651,6 +1651,7 @@ local TUTORIAL_PAGES = {
 local tutorialPage = 1
 
 local function showTutorialPage(page)
+	if not tutFrame or not tutTitle then return end
 	local data = TUTORIAL_PAGES[page]
 	if not data then return end
 
@@ -1675,35 +1676,45 @@ local function showTutorialPage(page)
 end
 
 local function closeTutorial()
-	tutorialOverlay.Visible = false
+	if tutFrame then tutFrame.Visible = false end
 	modeSelect.Visible = true
-	rpsTutorial:FireServer({ action = "done" })
+	if rpsTutorial then rpsTutorial:FireServer({ action = "done" }) end
 end
 
-tutNextBtn.MouseButton1Click:Connect(function()
-	playUISound(UI_SOUNDS.click, 0.5, 1.2)
-	tutorialPage += 1
-	if tutorialPage > #TUTORIAL_PAGES then
-		closeTutorial()
-	else
-		showTutorialPage(tutorialPage)
-	end
-end)
+if tutNextBtn then
+	tutNextBtn.MouseButton1Click:Connect(function()
+		playUISound(UI_SOUNDS.click, 0.5, 1.2)
+		tutorialPage += 1
+		if tutorialPage > #TUTORIAL_PAGES then
+			closeTutorial()
+		else
+			showTutorialPage(tutorialPage)
+		end
+	end)
+end
 
-tutSkipBtn.MouseButton1Click:Connect(function()
-	playUISound(UI_SOUNDS.click, 0.4, 0.8)
-	closeTutorial()
-end)
+if tutSkipBtn then
+	tutSkipBtn.MouseButton1Click:Connect(function()
+		playUISound(UI_SOUNDS.click, 0.4, 0.8)
+		closeTutorial()
+	end)
+end
 
 -- 서버에서 튜토리얼 필요 여부 수신
-rpsTutorial.OnClientEvent:Connect(function(data)
-	if typeof(data) == "table" and data.needTutorial then
-		modeSelect.Visible = false
-		tutorialOverlay.Visible = true
-		tutorialPage = 1
-		showTutorialPage(1)
-	end
-end)
+if rpsTutorial then
+	rpsTutorial.OnClientEvent:Connect(function(data)
+		if typeof(data) == "table" and data.needTutorial then
+			if tutFrame then
+				modeSelect.Visible = false
+				tutFrame.Visible = true
+				tutorialPage = 1
+				showTutorialPage(1)
+			end
+		else
+			if tutFrame then tutFrame.Visible = false end
+		end
+	end)
+end
 
 -----------------------------------------------
 -- 시작: 모드 선택 화면
@@ -1711,3 +1722,10 @@ end)
 hideAllUI()
 modeSelect.Visible = true
 scoreLabel.Text = "연승: 0"
+
+-- 모든 UI 로딩 완료 후 서버에 튜토리얼 상태 요청
+task.delay(0.5, function()
+	if rpsTutorial then
+		rpsTutorial:FireServer({ action = "check" })
+	end
+end)

@@ -21,7 +21,7 @@ local DEFAULT_DATA = {
 	tutorialDone = false,
 }
 
-local rpsTutorial = getOrCreate("RPSTutorial", "RemoteEvent")
+local rpsTutorial = nil -- getOrCreate 정의 후 초기화됨
 
 local playerDataCache = {} -- userId → 저장할 데이터
 
@@ -127,6 +127,7 @@ local rpsPvP = getOrCreate("RPSPvP", "RemoteEvent")
 local rpsAnnounce = getOrCreate("RPSAnnounce", "RemoteEvent")
 local rpsSkin = getOrCreate("RPSSkin", "RemoteEvent")
 local rpsSpectate = getOrCreate("RPSSpectate", "RemoteEvent")
+rpsTutorial = getOrCreate("RPSTutorial", "RemoteEvent")
 
 -----------------------------------------------
 -- ★ 스킨 데이터
@@ -183,17 +184,18 @@ Players.PlayerAdded:Connect(function(player)
 		active = data.activeSkin or "기본",
 	}
 
-	-- 튜토리얼 상태 전송
-	task.delay(1, function()
-		if player.Parent then
-			rpsTutorial:FireClient(player, { needTutorial = not data.tutorialDone })
-		end
-	end)
 end)
 
--- 튜토리얼 완료 수신
+-- 튜토리얼 이벤트 처리 (클라이언트 요청/완료)
 rpsTutorial.OnServerEvent:Connect(function(player, data)
-	if typeof(data) == "table" and data.action == "done" then
+	if typeof(data) ~= "table" then return end
+
+	if data.action == "check" then
+		local cache = playerDataCache[player.UserId]
+		local needTutorial = not (cache and cache.tutorialDone)
+		rpsTutorial:FireClient(player, { needTutorial = needTutorial })
+
+	elseif data.action == "done" then
 		local cache = playerDataCache[player.UserId]
 		if cache then
 			cache.tutorialDone = true

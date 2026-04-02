@@ -33,21 +33,7 @@ local function addGradient(parent, c1, c2, rotation)
 	return g
 end
 
-local function addShadow(parent)
-	local shadow = Instance.new("ImageLabel")
-	shadow.Name = "Shadow"
-	shadow.BackgroundTransparency = 1
-	shadow.Image = "rbxassetid://5554236805"
-	shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-	shadow.ImageTransparency = 0.6
-	shadow.ScaleType = Enum.ScaleType.Slice
-	shadow.SliceCenter = Rect.new(23, 23, 277, 277)
-	shadow.Size = UDim2.new(1, 30, 1, 30)
-	shadow.Position = UDim2.new(0, -15, 0, -10)
-	shadow.ZIndex = parent.ZIndex - 1
-	shadow.Parent = parent
-	return shadow
-end
+-- addShadow 제거됨 (에셋 로딩 실패 방지)
 
 -----------------------------------------------
 -- 모드 선택 화면
@@ -65,7 +51,6 @@ modeSelect.Parent = screenGui
 
 addCorner(modeSelect, 18)
 addStroke(modeSelect, Color3.fromRGB(255, 80, 50), 2)
-addShadow(modeSelect)
 
 local msTopBar = Instance.new("Frame")
 msTopBar.Size = UDim2.new(1, 0, 0, 4)
@@ -249,7 +234,6 @@ pvpWait.Parent = screenGui
 
 addCorner(pvpWait, 18)
 addStroke(pvpWait, Color3.fromRGB(255, 80, 50), 2)
-addShadow(pvpWait)
 
 local pwTitle = Instance.new("TextLabel")
 pwTitle.Name = "Title"
@@ -398,7 +382,6 @@ pvpEndFrame.Parent = screenGui
 
 addCorner(pvpEndFrame, 16)
 addStroke(pvpEndFrame, Color3.fromRGB(255, 255, 255), 1)
-addShadow(pvpEndFrame)
 
 local peResult = Instance.new("TextLabel")
 peResult.Name = "ResultLabel"
@@ -487,7 +470,6 @@ frame.Parent = screenGui
 
 addCorner(frame, 18)
 addStroke(frame, Color3.fromRGB(255, 200, 50), 2)
-addShadow(frame)
 
 local title = Instance.new("TextLabel")
 title.Name = "Title"
@@ -624,7 +606,6 @@ charSelect.Parent = screenGui
 
 addCorner(charSelect, 18)
 addStroke(charSelect, Color3.fromRGB(255, 80, 50), 2)
-addShadow(charSelect)
 
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 4)
@@ -979,7 +960,6 @@ shopFrame.ZIndex = 30
 shopFrame.Parent = screenGui
 addCorner(shopFrame, 18)
 addStroke(shopFrame, Color3.fromRGB(255, 200, 50), 2)
-addShadow(shopFrame)
 
 local shopTitle = Instance.new("TextLabel")
 shopTitle.Size = UDim2.new(1, 0, 0, 45)
@@ -1034,7 +1014,6 @@ spectateFrame.ZIndex = 30
 spectateFrame.Parent = screenGui
 addCorner(spectateFrame, 18)
 addStroke(spectateFrame, Color3.fromRGB(150, 150, 200), 2)
-addShadow(spectateFrame)
 
 local specTitle = Instance.new("TextLabel")
 specTitle.Size = UDim2.new(1, 0, 0, 40)
@@ -1107,40 +1086,29 @@ specInfoBar.Parent = screenGui
 addCorner(specInfoBar, 10)
 
 -----------------------------------------------
--- ★ 튜토리얼 오버레이
+-- ★ 튜토리얼 (오버레이 없이 직접 표시)
 -----------------------------------------------
-local tutorialOverlay = Instance.new("Frame")
-tutorialOverlay.Name = "TutorialOverlay"
-tutorialOverlay.Size = UDim2.new(1, 0, 1, 0)
-tutorialOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-tutorialOverlay.BackgroundTransparency = 0.4
-tutorialOverlay.BorderSizePixel = 0
-tutorialOverlay.Visible = false
-tutorialOverlay.ZIndex = 90
-tutorialOverlay.Parent = screenGui
-
 local tutFrame = Instance.new("Frame")
-tutFrame.Name = "TutFrame"
+tutFrame.Name = "TutorialFrame"
 tutFrame.Size = UDim2.new(0, 520, 0, 340)
 tutFrame.Position = UDim2.new(0.5, -260, 0.5, -170)
 tutFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
 tutFrame.BackgroundTransparency = 0.02
 tutFrame.BorderSizePixel = 0
-tutFrame.ZIndex = 91
-tutFrame.Parent = tutorialOverlay
+tutFrame.Visible = false
+tutFrame.ZIndex = 10
+tutFrame.Parent = screenGui
 addCorner(tutFrame, 20)
 addStroke(tutFrame, Color3.fromRGB(255, 200, 50), 2)
 
--- 상단 바
 local tutTopBar = Instance.new("Frame")
 tutTopBar.Size = UDim2.new(1, 0, 0, 4)
 tutTopBar.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
 tutTopBar.BorderSizePixel = 0
-tutTopBar.ZIndex = 92
+tutTopBar.ZIndex = 11
 tutTopBar.Parent = tutFrame
 addGradient(tutTopBar, Color3.fromRGB(255, 200, 50), Color3.fromRGB(255, 100, 30), 0)
 
--- 제목
 local tutTitle = Instance.new("TextLabel")
 tutTitle.Name = "Title"
 tutTitle.Size = UDim2.new(1, 0, 0, 40)
@@ -1150,10 +1118,9 @@ tutTitle.Text = ""
 tutTitle.TextColor3 = Color3.fromRGB(255, 220, 50)
 tutTitle.TextSize = 26
 tutTitle.Font = Enum.Font.GothamBlack
-tutTitle.ZIndex = 92
+tutTitle.ZIndex = 11
 tutTitle.Parent = tutFrame
 
--- 설명 텍스트
 local tutDesc = Instance.new("TextLabel")
 tutDesc.Name = "Desc"
 tutDesc.Size = UDim2.new(1, -40, 0, 140)
@@ -1165,10 +1132,9 @@ tutDesc.TextSize = 19
 tutDesc.Font = Enum.Font.GothamBold
 tutDesc.TextWrapped = true
 tutDesc.TextYAlignment = Enum.TextYAlignment.Top
-tutDesc.ZIndex = 92
+tutDesc.ZIndex = 11
 tutDesc.Parent = tutFrame
 
--- 이모지/아이콘
 local tutEmoji = Instance.new("TextLabel")
 tutEmoji.Name = "Emoji"
 tutEmoji.Size = UDim2.new(1, 0, 0, 60)
@@ -1176,10 +1142,9 @@ tutEmoji.Position = UDim2.new(0, 0, 0, 195)
 tutEmoji.BackgroundTransparency = 1
 tutEmoji.Text = ""
 tutEmoji.TextSize = 50
-tutEmoji.ZIndex = 92
+tutEmoji.ZIndex = 11
 tutEmoji.Parent = tutFrame
 
--- 페이지 표시
 local tutPage = Instance.new("TextLabel")
 tutPage.Name = "Page"
 tutPage.Size = UDim2.new(1, 0, 0, 20)
@@ -1189,10 +1154,9 @@ tutPage.Text = "1 / 5"
 tutPage.TextColor3 = Color3.fromRGB(120, 120, 140)
 tutPage.TextSize = 14
 tutPage.Font = Enum.Font.Gotham
-tutPage.ZIndex = 92
+tutPage.ZIndex = 11
 tutPage.Parent = tutFrame
 
--- 다음 버튼
 local tutNextBtn = Instance.new("TextButton")
 tutNextBtn.Name = "NextBtn"
 tutNextBtn.Size = UDim2.new(0, 160, 0, 46)
@@ -1203,12 +1167,11 @@ tutNextBtn.TextColor3 = Color3.fromRGB(30, 20, 0)
 tutNextBtn.TextSize = 20
 tutNextBtn.Font = Enum.Font.GothamBlack
 tutNextBtn.BorderSizePixel = 0
-tutNextBtn.ZIndex = 92
+tutNextBtn.ZIndex = 11
 tutNextBtn.Parent = tutFrame
 addCorner(tutNextBtn, 10)
 addGradient(tutNextBtn, Color3.fromRGB(255, 200, 50), Color3.fromRGB(255, 150, 20))
 
--- 건너뛰기 버튼
 local tutSkipBtn = Instance.new("TextButton")
 tutSkipBtn.Name = "SkipBtn"
 tutSkipBtn.Size = UDim2.new(0, 100, 0, 46)
@@ -1219,6 +1182,6 @@ tutSkipBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
 tutSkipBtn.TextSize = 16
 tutSkipBtn.Font = Enum.Font.GothamBold
 tutSkipBtn.BorderSizePixel = 0
-tutSkipBtn.ZIndex = 92
+tutSkipBtn.ZIndex = 11
 tutSkipBtn.Parent = tutFrame
 addCorner(tutSkipBtn, 10)
